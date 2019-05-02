@@ -19,7 +19,7 @@ end
 @testset "fft, 1D, real" begin
     n = 512
     spDom = JetSpace(Float64, n)
-    spRng = symspace(typeof(JetPackTransforms.JopFft_df!), Float64, 1, n)
+    spRng = symspace(JopFft, Float64, 1, n)
     m = rand(spDom)
     d = rand(spRng)
     d[1] = real(d[1])
@@ -42,7 +42,7 @@ end
 @testset "fft, 2D, real->complex" begin
     n1, n2 = 128, 256
     spDom = JetSpace(Float64, n1, n2)
-    spRng = symspace(typeof(JetPackTransforms.JopFft_df!), Float64, 1, n1, n2)
+    spRng = symspace(JopFft, Float64, 1, n1, n2)
     m = rand(spDom)
     d = rand(spRng)
     A = JopFft(Float64,n1,n2)

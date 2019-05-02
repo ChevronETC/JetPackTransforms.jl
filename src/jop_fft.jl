@@ -110,7 +110,7 @@ function JopFft_symspace_map(I, symdim::Int, n::NTuple{N,Int}, _n::NTuple{N,Int}
     end
 end
 
-function Jets.symspace(JopFft_df!, ::Type{T}, symdim::Int, n::Vararg{Int,N}) where {T,N}
+function Jets.symspace(JopFft, ::Type{T}, symdim::Int, n::Vararg{Int,N}) where {T,N}
     _n = ntuple(idim->idim == symdim ? div(n[idim], 2) + 1 : n[idim], N)
     Jets.JetSSpace(Complex{T}, n, _n, I->JopFft_symspace_map(I, symdim, n, _n))
 end
