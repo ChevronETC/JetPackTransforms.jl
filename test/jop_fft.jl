@@ -16,6 +16,14 @@ using FFTW, Jets, JetPackTransforms, Test
     @test expected ≈ observed
 end
 
+@testset "fft, alternative constructor" begin
+    R = JetSpace(Float64,512)
+    A = JopFft(R)
+    B = JopFft(Float64,512)
+    m = rand(R)
+    @test A*m ≈ B*m
+end
+
 @testset "fft, 1D, real" begin
     n = 512
     spDom = JetSpace(Float64, n)
