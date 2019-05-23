@@ -53,6 +53,7 @@ function JopFft(::Type{T},n::Vararg{Int,N};dims=()) where {T<:Complex,N}
     dims = isempty(dims) ? ntuple(i->i, N) : dims
     JopLn(dom = JetSpace(T,n), rng = JetSpace(T,n), df! = JopFft_df!, df′! = JopFft_df′!, s = (dims=dims,))
 end
+JopFft(R::JetSpace; dims=()) = JopFft(eltype(R), size(R)...; dims=dims)
 export JopFft
 
 function JopFft_df!(d::AbstractArray{Complex{T}}, m::AbstractArray{T}; dims, kwargs...) where {T<:Real}
