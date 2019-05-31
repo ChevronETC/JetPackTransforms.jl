@@ -18,13 +18,15 @@ A = JopDwt(Float64, 64, 64; wt=wavelet(WT.db5))
 d = A*rand(domain(A))
 ```
 """
-function JopDwt(::Type{T}, n::Vararg{N}; wt=wavelet(WT.haar, WT.Lifting)) where {T,N}
+function JopDwt(sp::JetSpace; wt=wavelet(WT.haar, WT.Lifting)) where {T,N}
+    n = size(sp)
     @assert length(n) <= 3
     map(i->@assert(n[i]==n[1]), 2:length(n))
     @assert n[1] == nextpow(2, n[1])
     wt.name != "haar" && startswith(wt.name, "db") != true && error("JopDwt only supports Haar and Daubechies wavelet functions")
-    JopLn(dom = JetSpace(T,n), rng = JetSpace(T,n), df! = JopDwt_df!, df′! = JopDwt_df′!, s = (wt=wt,))
+    JopLn(dom = sp, rng = sp, df! = JopDwt_df!, df′! = JopDwt_df′!, s = (wt=wt,))
 end
+JopDwt(::Type{T}, n::Vararg{N}; kwargs...) where {T,N} = JopDwt(JetSpace(T,n); kwargs...)
 export JopDwt
 
 function JopDwt_df!(d::AbstractArray, m::AbstractArray; wt, kwargs...)

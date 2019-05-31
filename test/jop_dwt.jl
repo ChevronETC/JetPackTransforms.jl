@@ -11,7 +11,7 @@ using Jets, JetPackTransforms, Test, Wavelets
 
     # 2D transform Haar
     println("2D Haar")
-    A = JopDwt(Float64, 128, 128)
+    A = JopDwt(JetSpace(Float64, 128, 128))
     m = rand(domain(A))
     d = rand(range(A))
     lhs, rhs = dot_product_test(A, m, d)
