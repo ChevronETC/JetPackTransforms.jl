@@ -56,9 +56,13 @@ end
 JopFft(R::JetSpace; dims=()) = JopFft(eltype(R), size(R)...; dims=dims)
 export JopFft
 
-function JopFft_df!(d::AbstractArray{Complex{T}}, m::AbstractArray{T}; dims, kwargs...) where {T<:Real}
+function JopFft_df!(d::Jets.SymmetricArray{Complex{T}}, m::AbstractArray{T}; kwargs...) where {T}
+    JopFft_df!(parent(d), m; kwargs...)
+    d
+end
+function JopFft_df!(d::Array{Complex{T}}, m::AbstractArray{T}; dims, kwargs...) where {T<:Real}
     P = plan_rfft(m, dims)
-    JopFft_mul!(parent(d), P, m, dims)
+    JopFft_mul!(d, P, m, dims)
     d
 end
 
@@ -74,8 +78,9 @@ function JopFft_mul!(d::AbstractArray{T}, P::FFTW.FFTWPlan, m::AbstractArray, di
     d .*= sc
 end
 
-function JopFft_df′!(m::AbstractArray{T}, d::AbstractArray; dims, kwargs...) where {T<:Real}
-    P = plan_brfft(parent(d), size(m, dims[1]), dims)
+JopFft_df′!(m::AbstractArray{T}, d::Jets.SymmetricArray{Complex{T}}; kwargs...) where {T} = JopFft_df′!(m, parent(d); kwargs...)
+function JopFft_df′!(m::AbstractArray{T}, d::Array{Complex{T}}; dims, kwargs...) where {T<:Real}
+    P = plan_brfft(d, size(m, dims[1]), dims)
     JopFft_mul_adjoint!(m, P, copy(parent(d)), dims) # in-place version of brfft modifies the input buffer
     m
 end
