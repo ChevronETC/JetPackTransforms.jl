@@ -1,6 +1,6 @@
 name = "JetPackTransforms"
 uuid = "e0630bc5-6e1f-509c-a3e4-0aea24bd2b1c"
-version = "0.0.0"
+version = "0.1.0"
 
 [deps]
 CurveLab = "8203d762-dcd8-5551-b9e2-206fc6f79994"
