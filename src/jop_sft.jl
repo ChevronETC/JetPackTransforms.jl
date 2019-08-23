@@ -1,16 +1,15 @@
 """
-```op = JopSft(dom,rng,freqs,dt)```
+    op = JopSft(dom,freqs,dt)
 
-This operator performs monochromatic slow Fourier transforms for a specified list of frequencies. Tranform is taken along the fast dimension.
-    dom::JetSpace{T,N}` is the domain of the operator
-    rng::JetSpace{Complex{T},N}` is the range of the operator, with length of the fastest dimension replaced by the number of frequencies selected
+Polychromatic slow Fourier transforms for a specified list of frequencies. Tranform
+along the fast dimension of `dom::JetSpace{<:Real}`.
 
 Note: regarding the factor of (2/n):
     the factor "1/n" is from the Fourier transform
     I think the "2" is from Hermittian symmetry, but not entirely sure
 """
-function JopSft(dom::JetSpace{T,N},rng::JetSpace{Complex{T},N},freqs::Array{U,1},dt::V) where {T,N,U<:Real,V<:Real}
-    JopLn(dom = dom, rng = rng, df! = JopSft_df!, df′! = JopSft_df′!, s = (freqs=freqs, dt=dt))
+function JopSft(dom::JetSpace{T}, freqs::Vector, dt) where {T<:Real}
+    JopLn(dom = dom, rng = JetSpace(Complex{T}, size(dom)), df! = JopSft_df!, df′! = JopSft_df′!, s = (freqs=freqs, dt=dt))
 end
 export JopSft
 

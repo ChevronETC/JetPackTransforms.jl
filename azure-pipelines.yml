@@ -42,11 +42,8 @@ steps:
     git clone chevron@vs-ssh.visualstudio.com:v3/chevron/ETC-ESD-CurveLab.jl/CurveLabBuilder /tmp/CurveLabBuilder
     export CODE_REPO_PATH="/tmp"
 
-    /opt/julia/bin/julia -e 'using Pkg; pkg"add FFTW LinearAlgebra Wavelets"'
-    /opt/julia/bin/julia -e 'using Pkg; pkg"develop --local $(HOME)/.julia/dev/CurveLab"'
-    /opt/julia/bin/julia -e 'using Pkg; pkg"develop --local $(HOME)/.julia/dev/Jets"'
-    /opt/julia/bin/julia -e 'using Pkg; pkg"develop --local $(HOME)/.julia/dev/JetPack"'
-    /opt/jluia/bin/julia -e 'using Pkg; pkg"build CurveLab"'
+    /opt/julia/bin/julia -e 'using Pkg; pkg"add CurveLab FFTW Jets JetPack LinearAlgebra Wavelets"'
+    /opt/julia/bin/julia -e 'using Pkg; pkg"develop --local $(HOME)/.julia/dev/JetPackTransforms"'
     /opt/julia/bin/julia -e 'using Pkg; pkg"precompile"'
   env:
     MYJULIA_VERSION: $(JULIA_VERSION)
