@@ -1,7 +1,3 @@
-using Documenter, DocumenterMarkdown, JetPackTransforms
+using Documenter, JetPackTransforms
 
-makedocs(
-    format = Markdown(),
-    sitename = "JetPackTransforms"
-)
-cp("build/README.md", "../README.md", force=true)
+makedocs(sitename = "JetPackTransforms", modules=[JetPackTransforms])
