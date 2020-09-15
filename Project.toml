@@ -10,11 +10,14 @@ Jets = "2a57b368-ab28-5ba9-84aa-637fe7991822"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 Wavelets = "29a6e085-ba6d-5f35-a997-948ac2efa89a"
 
+[compat]
+Wavelets = "0.9"
+
 [extras]
 Documenter = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
 DocumenterMarkdown = "997ab1e6-3595-5248-9280-8efb232c3433"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [targets]
-test = ["Test"]
 docs = ["Documenter", "DocumenterMarkdown"]
+test = ["Test"]
