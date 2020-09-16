@@ -10,7 +10,6 @@ CurveLab.jl and Wavelets.jl.
 
 * JetPackTransforms.JopDct  - N-dimensional discrete cosine transform
 * JetPackTransforms.JopDwt  - N-dimensional discrete wavelet transform
-* JetPackTransforms.JopFdct - 2D discrete discrite curvelet transform
 * JetPackTransforms.JopFft  - N-dimensional Fast Fourier transform
 * JetPackTransforms.JopSft  - N-dimensional Slow Fourier transform
 * JetPackTransforms.JopSlantStack - 2D slant stack transform
