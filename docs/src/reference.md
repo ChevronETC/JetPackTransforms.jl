@@ -4,3 +4,7 @@
 Modules = [JetPackTransforms]
 Order = [:function]
 ```
+
+# Index
+```@index
+```

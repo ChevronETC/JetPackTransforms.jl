@@ -1,15 +1,23 @@
-| **Documentation**                                                               |
-|:-------------------------------------------------------------------------------:|
-| [![](https://img.shields.io/badge/docs-dev-blue.svg)](https://chevronetc.github.io/JetPackTransforms.jl/dev/) |
 # JetPackTransforms.jl
 
+| **Documentation** | **Action Statuses** |
+|:---:|:---:|
+| [![][docs-dev-img]][docs-dev-url] [![][docs-stable-img]][docs-stable-url] | [![][doc-build-status-img]][doc-build-status-url] [![][build-status-img]][build-status-url] [![][code-coverage-img]][code-coverage-results] |
+
 This package contains transform operators for Jets.jl that depend on FFTW.jl,
-CurveLab.jl and Wavelets.jl.
+and Wavelets.jl.  For more information, please see [Jets.jl](https://github.com/ChevronETC/Jets.jl).
 
-# Jet transforms operator pack
+[docs-dev-img]: https://img.shields.io/badge/docs-dev-blue.svg
+[docs-dev-url]: https://chevronetc.github.io/JetPackTransforms.jl/dev/
 
-* JetPackTransforms.JopDct  - N-dimensional discrete cosine transform
-* JetPackTransforms.JopDwt  - N-dimensional discrete wavelet transform
-* JetPackTransforms.JopFft  - N-dimensional Fast Fourier transform
-* JetPackTransforms.JopSft  - N-dimensional Slow Fourier transform
-* JetPackTransforms.JopSlantStack - 2D slant stack transform
+[docs-stable-img]: https://img.shields.io/badge/docs-stable-blue.svg
+[docs-stable-url]: https://ChevronETC.github.io/JetPackTransforms.jl/stable
+
+[doc-build-status-img]: https://github.com/ChevronETC/JetPackTransforms.jl/workflows/Documentation/badge.svg
+[doc-build-status-url]: https://github.com/ChevronETC/JetPackTransforms.jl/actions?query=workflow%3ADocumentation
+
+[build-status-img]: https://github.com/ChevronETC/JetPackTransforms.jl/workflows/Tests/badge.svg
+[build-status-url]: https://github.com/ChevronETC/JetPackTransforms.jl/actions?query=workflow%3A"Tests"
+
+[code-coverage-img]: https://codecov.io/gh/ChevronETC/JetPackTransforms.jl/branch/master/graph/badge.svg
+[code-coverage-results]: https://codecov.io/gh/ChevronETC/JetPackTransforms.jl
