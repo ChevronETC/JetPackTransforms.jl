@@ -1,5 +1,3 @@
-using Revise
-
 using JetPackTransforms, Jets, Test
 
 @testset "JetSlantStack, dot product test" for T in (Float32, Float64)
