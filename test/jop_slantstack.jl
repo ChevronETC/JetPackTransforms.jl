@@ -7,11 +7,11 @@ using JetPackTransforms, Jets, Test
     d = A*m
 
     lhs, rhs = dot_product_test(A,rand(domain(A)),rand(range(A)))
-    @test isapprox(lhs,rhs,rtol=1e-5)
+    @test isapprox(lhs,rhs,rtol=1e-4)
 
     A = JopSlantStack(JetSpace(T, 64, 128); dz=10.0, dh=10.0, h0=-1000.0, taperz=(0.3,0.3), taperh=(0.3,0.3), taperkz=(0.3,0.3), taperkh=(0.3,0.3))
     lhs, rhs = dot_product_test(A,rand(domain(A)),rand(range(A)))
-    @test isapprox(lhs,rhs,rtol=1e-5)
+    @test isapprox(lhs,rhs,rtol=1e-4)
 end
 
 @testset "JetSlantStack, correctness" begin
