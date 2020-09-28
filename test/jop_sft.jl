@@ -1,4 +1,4 @@
-using Jets, JetPackTransforms, LinearAlgebra, Printf, Test, FFTW
+using Jets, JetPackTransforms, LinearAlgebra, Test, FFTW
 
 n1,n2 = 500,5
 dt = 0.001
