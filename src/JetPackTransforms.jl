@@ -1,6 +1,6 @@
 module JetPackTransforms
 
-using CurveLab, FFTW, JetPack, Jets, LinearAlgebra, Wavelets
+using FFTW, JetPack, Jets, LinearAlgebra, Wavelets
 
 include("jop_dct.jl")
 include("jop_dwt.jl")
