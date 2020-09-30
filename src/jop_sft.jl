@@ -7,7 +7,7 @@ along the fast dimension of `dom::JetSpace{<:Real}`.
 Notes:
     - it is expected that the domain is 2D real of size [nt,ntrace]
     - the range will be 2D complex of size [length(freqs),ntrace]
-    - regarding the factor of (2/n): the factor "1/n" is from the Fourier transform, I think the "2" is from Hermittian symmetry, but not entirely sure
+    - regarding the factor of (2/n): the factor "1/n" is from the Fourier transform, and the "2" is from Hermittian symmetry.
 """
 function JopSft(dom::JetSpace{T}, freqs::Vector, dt) where {T<:Real}
     @assert length(size(dom)) == 2
