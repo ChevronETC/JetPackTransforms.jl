@@ -18,7 +18,7 @@ A = JopDwt(Float64, 64, 64; wt=wavelet(WT.db5))
 d = A*rand(domain(A))
 ```
 """
-function JopDwt(sp::JetSpace; wt=wavelet(WT.haar, WT.Lifting)) where {T,N}
+function JopDwt(sp::JetSpace; wt=wavelet(WT.haar, WT.Lifting))
     n = size(sp)
     @assert length(n) <= 3
     map(i->@assert(n[i]==n[1]), 2:length(n))
