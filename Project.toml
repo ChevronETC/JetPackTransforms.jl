@@ -1,6 +1,6 @@
 name = "JetPackTransforms"
 uuid = "e0630bc5-6e1f-509c-a3e4-0aea24bd2b1c"
-version = "0.1.0"
+version = "0.1.1"
 
 [deps]
 FFTW = "7a1cc6ca-52ef-59f5-83cd-3a7055c09341"
