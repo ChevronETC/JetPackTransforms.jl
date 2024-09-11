@@ -7,7 +7,7 @@ origin of the half-offset axis.  The additional named optional arguments along w
 values are,
 
 * `theta=-60:1.0:60` - range of opening angles.  The ray parameter is: p=sin(theta/2)/c
-* `padz=0.0,padh=0.0` - padding in depth and offset to apply before applying the Fourier transfrom
+* `padz=0.0,padh=0.0` - fractional padding in depth and offset to apply before applying the Fourier transfrom
 * `taperz=(0,0)` - beginning and end taper in the z-direction before transforming from `z-h` to `kz-kh`
 * `taperh=(0,0)` - beginning and end taper in the h-direction before transforming from `z-h` to `kz-kh`
 * `taperkz=(0,0)` - beginning and end taper in the kz-direction before transforming from `kz-kh` to `z-h`
