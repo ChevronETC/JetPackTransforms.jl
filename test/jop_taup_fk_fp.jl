@@ -1,59 +1,63 @@
-using JetPackTransforms, Jets, LinearAlgebra, PyPlot, Test
+using JetPackTransforms, Jets, LinearAlgebra, PyPlot, Serialization, Test
 
-# @testset "JopTauP_FK_FP, shift test" for T in (Float32, Float64)
-@testset "JopTauP_FK_FP, shift test" for T in (Float32, )
-    Δz = 10.0
-    Δx = 10.0
-    z0 = 0.0
-    x0 = 0.0
+# @testset "JopTauP_FK_FP, shift test" for T in (Float32, ), perturb in (1,2,3,4,5)
+@testset "JopTauP_FK_FP, shift test" for T in (Float32, ), perturb in (5,)
+    io = open("shot_gather.jls", "r")
+    (data,t0,x0,Δt,Δx) = deserialize(io)
+    close(io)
+    nt,nx = size(data)
 
-    A = JopTauP_FK_FP(JetSpace(T, 101, 101); Δz=Δz, Δx=Δx, z0=z0, x0=x0, np=101)
+    A = JopTauP_FK_FP(JetSpace(T, nt, nx); t0=t0, x0=x0, Δt=Δt, Δx=Δx, np=301, vmin=1000.0)
     m = zeros(domain(A))
-    nz,nx = size(domain(A))
-    nz2,nx2 = div(nz,2), div(nx,2)
-    box = 5
-    m[nz2-box:nx2+box, nx2-box:nx2+box] .= 1.0
-    @show extrema(m)
+    if perturb == 1
+        m[div(nt,2)-1:div(nt,2)+1,div(nx,2)-1:div(nx,2)+1] .= 1
+    elseif perturb == 2
+        m[div(nt,3)-1:div(nt,3)+1,div(nx,2)-1:div(nx,2)+1] .= 1
+    elseif perturb == 3
+        m[div(nt,2)-1:div(nt,2)+1,div(nx,3)-1:div(nx,3)+1] .= 1
+    elseif perturb == 4
+        m[div(nt,3)-1:div(nt,3)+1,div(nx,3)-1:div(nx,3)+1] .= 1
+    elseif perturb == 5
+        m .= data
+    end
+
     d = A * m
-    @show extrema(m)
-    @show extrema(d)
-    @show extrema(m .- d)
+    m2 = A' * d
 
     xmin, xmax = x0, x0+Δx*(nx-1)
-    zmin, zmax = z0, z0+Δz*(nz-1)
-    extentXZ = [xmin,xmax,zmax,zmin]
+    tmin, tmax = t0, t0+Δt*(nt-1)
+    extentXZ = [xmin,xmax,tmax,tmin]
 
-    figure(figsize=(16,12))
+    scale = 3
 
-    subplot(2,2,1); 
-    imshow(m,aspect="auto", cmap="seismic", extent=extentXZ, clim=[-1,+1]);
-    colorbar(orientation="vertical", label="Magnitude", pad=0.02, fraction=0.05, shrink=1.0)
-    xlabel("X"); ylabel("Z"); title("Input");
+    figure(figsize=(16,8))
 
-    subplot(2,2,2); 
-    imshow(d,aspect="auto", cmap="seismic", extent=extentXZ, clim=[-1,+1]);
-    colorbar(orientation="vertical", label="Magnitude", pad=0.02, fraction=0.05, shrink=1.0)
-    xlabel("X"); ylabel("Z"); title("Shifted");
+    subplot(1,3,1); 
+    imshow(scale .* m ./ maximum(abs.(m)),aspect="auto", cmap="seismic", extent=extentXZ, clim=[-1,+1]);
+    xlabel("X"); ylabel("Z"); title("Input T-X");
 
-    subplot(2,2,3); 
-    imshow(m .- d,aspect="auto", cmap="seismic", extent=extentXZ, clim=[-1,+1]);
-    colorbar(orientation="vertical", label="Magnitude", pad=0.02, fraction=0.05, shrink=1.0)
-    xlabel("X"); ylabel("Z"); title("Input - Shifted");
+    subplot(1,3,2); 
+    imshow(scale .* m2 ./ maximum(abs.(m2)),aspect="auto", cmap="seismic", extent=extentXZ, clim=[-1,+1]);
+    xlabel("X"); ylabel("Z"); title("Round Trip T-X");
+
+    subplot(1,3,3); 
+    imshow(scale .* d ./ maximum(abs.(d)),aspect="auto", cmap="seismic", extent=extentXZ, clim=[-1,+1]);
+    xlabel("X"); ylabel("Z"); title("Forward Tau-P");
 
     tight_layout()
-    filename = "image-taup-shift.png" 
+    filename = "image-taup-shift-$(perturb).png" 
     savefig(filename, dpi=150)
 end
 
-# @testset "JopTauP_FK_FP, dot product test" for T in (Float32, Float64)
-#     A = JopTauP_FK_FP(JetSpace(T, 64, 128); Δz=10.0, Δx=10.0, z0=0.0, x0=0.0)
-#     lhs, rhs = dot_product_test(A, rand(domain(A)), rand(range(A)))
-#     dif = (lhs - rhs) / (lhs + rhs)
-#     @show lhs
-#     @show rhs
-#     @show  dif
-#     @test isapprox(lhs,rhs,rtol=1e-4)
-# end
+@test_skip @testset "JopTauP_FK_FP, dot product test" for T in (Float32, Float64)
+    A = JopTauP_FK_FP(JetSpace(T, 64, 128); Δt=0.005, Δx=10.0, t0=0.0, x0=0.0)
+    lhs, rhs = dot_product_test(A, rand(domain(A)), rand(range(A)))
+    dif = (lhs - rhs) / (lhs + rhs)
+    @show lhs
+    @show rhs
+    @show  dif
+    @test isapprox(lhs,rhs,rtol=1e-4)
+end
 
 # @testset "JopTauP_FK_FP, correctness" begin
 #     A = JopTauP_FK_FP(JetSpace(Float64, 64, 128); dz=10.0, dh=10.0, h0=-1000.0)
