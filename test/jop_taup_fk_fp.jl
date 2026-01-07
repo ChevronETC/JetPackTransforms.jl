@@ -1,7 +1,7 @@
 using JetPackTransforms, Jets, LinearAlgebra, PyPlot, Serialization, Test
 
 # @testset "JopTauP_FK_FP, shift test" for T in (Float32, ), perturb in (1,2,3,4,5)
-@testset "JopTauP_FK_FP, shift test" for T in (Float32, ), perturb in (5,)
+@test_skip @testset "JopTauP_FK_FP, shift test" for T in (Float32, ), perturb in (5,)
     io = open("shot_gather.jls", "r")
     (data,t0,x0,Δt,Δx) = deserialize(io)
     close(io)
@@ -49,7 +49,7 @@ using JetPackTransforms, Jets, LinearAlgebra, PyPlot, Serialization, Test
     savefig(filename, dpi=150)
 end
 
-@test_skip @testset "JopTauP_FK_FP, dot product test" for T in (Float32, Float64)
+@testset "JopTauP_FK_FP, dot product test" for T in (Float32, Float64)
     A = JopTauP_FK_FP(JetSpace(T, 64, 128); Δt=0.005, Δx=10.0, t0=0.0, x0=0.0)
     lhs, rhs = dot_product_test(A, rand(domain(A)), rand(range(A)))
     dif = (lhs - rhs) / (lhs + rhs)

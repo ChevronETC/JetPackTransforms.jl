@@ -121,7 +121,7 @@ function JopTauP_FK_FP_df!(d::AbstractArray{T,2}, m::AbstractArray{T,2}; nfft_t,
     mtmp = zeros(T, nfft_t, nfft_x)
     mtmp[1:nt,1:nx] .= m
     
-    # Forward Fourier temporal and spatial transforms
+    # Forward 2D Fourier temporal and spatial transforms
     M = fft(mtmp) .* (1 / sqrt(nfft_t * nfft_x))
     
     # spatial phase shift
@@ -144,7 +144,7 @@ function JopTauP_FK_FP_df!(d::AbstractArray{T,2}, m::AbstractArray{T,2}; nfft_t,
         D[kfft_t,kp] += matrixPtoK[k] * M[kfft_t,kfft_x];
     end
 
-    # Inverse temporal Fourier transform
+    # Inverse 1D temporal Fourier transform
     dtmp = zeros(Complex{T}, nfft_t, np)
     for kp ∈ 1:np
         dtmp[:,kp] = bfft(D[:,kp]) .* (1 / sqrt(nfft_t))
@@ -164,7 +164,7 @@ function JopTauP_FK_FP_df′!(m::AbstractArray{T,2}, d::AbstractArray{T,2}; nfft
     dtmp = zeros(Complex{T}, nfft_t, np)
     dtmp[1:nt,1:np] .= d
     
-    # Forward Fourier temporal and spatial transforms
+    # Forward 1D Fourier temporal and spatial transforms
     D = zeros(Complex{T}, nfft_t, np)
     for kp ∈ 1:np
         D[:,kp] = fft(dtmp[:,kp]) .* (1 / sqrt(nfft_t))
@@ -190,6 +190,7 @@ function JopTauP_FK_FP_df′!(m::AbstractArray{T,2}, d::AbstractArray{T,2}; nfft
         end
     end
 
+    # Inverse 2D Fourier temporal and spatial transforms
     mtmp = bfft(M) .* (1 / sqrt(nfft_t * nfft_x))
 
     m .= real.(mtmp[1:nt,1:nx])
