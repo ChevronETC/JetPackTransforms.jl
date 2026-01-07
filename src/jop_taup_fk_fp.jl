@@ -30,12 +30,6 @@ function JopTauP_FK_FP(
     # build the interpolation matrix
     (indexPtoK_T, indexPtoK_X, indexPtoK_P, matrixPtoK) = interpolation_matrix(nt,nx,np,nfft_t,nfft_x,Δt,Δx,vmin)
 
-    write(stdout,"\n")
-    @show extrema(indexPtoK_T)
-    @show extrema(indexPtoK_X)
-    @show extrema(indexPtoK_P)
-    @show extrema(matrixPtoK)
-
     JopLn(
         dom = dom, 
         rng = JetSpace(T, nt, np), 
