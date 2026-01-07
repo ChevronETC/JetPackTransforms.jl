@@ -7,11 +7,11 @@ using JetPackTransforms, Jets, LinearAlgebra, PyPlot, Serialization, Test
     close(io)
     nt,nx = size(data)
     @show t0,x0,Δt,Δx
-    x0 = +3.0
+    x0 = -3.0
     @show t0,x0,Δt,Δx
 
     A = JopTauP_FK_FP(JetSpace(T, nt, nx); t0=t0, x0=x0, Δt=Δt, Δx=Δx, padt=2, padx=2, 
-        taperT=(0.05,0.05), taperX=(0.05,0.05), np=501, vmin=1000.0, interpsinc=1)
+        taperT=(0.05,0.05), taperX=(0.05,0.05), np=501, vmin=1000.0, interpsinc=0)
     m = zeros(domain(A))
     if perturb == 1
         m[div(nt,2)-1:div(nt,2)+1,div(nx,2)-1:div(nx,2)+1] .= 1

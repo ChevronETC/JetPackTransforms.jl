@@ -90,12 +90,12 @@ function interpolation_matrix(nt::Int64, nx::Int64, np::Int64, nfft_t::Int64, nf
                     push!(indexPtoK_T, kfft_t)
                     push!(indexPtoK_X, kfft_x)
                     push!(indexPtoK_P, kp + 0)
-                    push!(matrixPtoK, dp)
-
+                    push!(matrixPtoK, 1 - dp)
+                    
                     push!(indexPtoK_T, kfft_t)
                     push!(indexPtoK_X, kfft_x)
                     push!(indexPtoK_P, kp + 1)
-                    push!(matrixPtoK, 1 - dp)
+                    push!(matrixPtoK, dp)
                 end
             end
         end
@@ -160,7 +160,7 @@ function JopTauP_FK_FP_df!(d::AbstractArray{T,2}, m::AbstractArray{T,2}; nfft_t,
     if abs(x0) > 0.0
         kx = convert(Array{T}, fftfreq(nfft_x, 1/Δx))
         for kfft_x = 1:nfft_x
-            pshift = exp(+ im * 2π * kx[kfft_x] * x0) 
+            pshift = exp(- im * 2π * kx[kfft_x] * x0) 
             for kfft_t = 1:nfft_t
                 M[kfft_t,kfft_x] *= pshift
             end
@@ -169,6 +169,7 @@ function JopTauP_FK_FP_df!(d::AbstractArray{T,2}, m::AbstractArray{T,2}; nfft_t,
 
     # stretch f-k to f-p by sinc interpolation
     D = zeros(Complex{T}, nfft_t, np)
+    kx = convert(Array{T}, fftfreq(nfft_x, 1/Δx))
     for k ∈ eachindex(matrixPtoK)
         kfft_t = indexPtoK_T[k]
         kfft_x = indexPtoK_X[k]
@@ -204,6 +205,7 @@ function JopTauP_FK_FP_df′!(m::AbstractArray{T,2}, d::AbstractArray{T,2}; nfft
 
     # stretch f-p to f-k by sinc interpolation
     M = zeros(Complex{T}, nfft_t, nfft_x)
+    kx = convert(Array{T}, fftfreq(nfft_x, 1/Δx))
     for k ∈ eachindex(matrixPtoK)
         kfft_t = indexPtoK_T[k]
         kfft_x = indexPtoK_X[k]
@@ -215,7 +217,7 @@ function JopTauP_FK_FP_df′!(m::AbstractArray{T,2}, d::AbstractArray{T,2}; nfft
     if abs(x0) > 0.0
         kx = convert(Array{T}, fftfreq(nfft_x, 1/Δx))
         for kfft_x = 1:nfft_x
-            pshift = exp(- im * 2π * kx[kfft_x] * x0) 
+            pshift = exp(+ im * 2π * kx[kfft_x] * x0) 
             for kfft_t = 1:nfft_t
                 M[kfft_t,kfft_x] *= pshift
             end
