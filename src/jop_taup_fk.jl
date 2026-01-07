@@ -11,6 +11,7 @@ The additional named optional arguments along with their default values are:
   `vmin=5000` maximum velocity for ray parameter sampling (m/s)
   `np`=201 number of ray parameters to sample in [-vmin,+vmin]
   `padt=1.0,padx=1.0` - fractional padding in depth and offset to apply before applying the Fourier transfrom
+  `weight=0` = if non-zero, apply semblance weighting as right preocnditioner
 """
 function JopTauP_FK(
         dom::JetAbstractSpace{T};
@@ -23,6 +24,7 @@ function JopTauP_FK(
         padt = 1.0,
         taperT = (0.0,0.0),
         taperX = (0.0,0.0),
+        weight = 0
         ) where {T}
     Δt < 0.0 && error("expected Δt > 0.0, got Δt=$(Δt)")
     Δx < 0.0 && error("expected Δh > 0.0, got Δx=$(Δx)")
@@ -31,16 +33,20 @@ function JopTauP_FK(
     t0,x0,Δt,Δx,vmin = T(t0),T(x0),T(Δt),T(Δx),T(vmin)
 
     nfft = nextprod([2,3,5,7], round(Int, nt * (1 + padt)))
+    nfreq = div(nfft,2) + 1
 
     # T-X taper
     taperTX = JopTaper(dom, (1,2), (taperT[1],taperX[1]), (taperT[2],taperX[2]))
+
+    # semblance placeholder 
+    S = ones(T, nfreq, np)
 
     JopLn(
         dom = dom, 
         rng = JetSpace(T, nt, np), 
         df! = JopTauP_FK_df!, 
         df′! = JopTauP_FK_df′!,
-        s = (nfft=nfft, t0=t0, x0=x0, Δt=Δt, Δx=Δx, vmin=vmin, taperTX=taperTX))
+        s = (nfft=nfft, t0=t0, x0=x0, Δt=Δt, Δx=Δx, vmin=vmin, taperTX=taperTX, weight=weight, S=S))
 end
 export JopTauP_FK
 
@@ -48,7 +54,7 @@ export JopTauP_FK
 # 1. Forward temporal Fourier transforms: T-X to F-X
 # 2. Shift and sum for each P with temporal phase shifts: F-X to F-P
 # 3. Inverse Temporal Fourier transform: F-P to Tau-P
-function JopTauP_FK_df!(d::AbstractArray{T,2}, m::AbstractArray{T,2}; nfft, t0, x0, Δt, Δx, vmin, taperTX, kwargs...) where {T}
+function JopTauP_FK_df!(d::AbstractArray{T,2}, m::AbstractArray{T,2}; nfft, t0, x0, Δt, Δx, vmin, taperTX, weight, S, kwargs...) where {T}
     nt, nx, np = size(m,1), size(m,2), size(d,2)
     
     # Forward 1D temporal Fourier transform
@@ -69,6 +75,27 @@ function JopTauP_FK_df!(d::AbstractArray{T,2}, m::AbstractArray{T,2}; nfft, t0, 
     frequencies = convert(Array{T}, fftfreq(nfft, 1 / Δt))
     frequencies = frequencies[1:nfreq] # only non-negative frequencies
 
+    # compute semblance as right preconditioner
+    if weight > 0
+        @info "computing semblance weighting"
+        for kp ∈ 1:np
+            pp = pmin + (pmax - pmin) * (kp-1) / (np-1)
+
+            for kfft = 1:nfreq
+                semblance = Complex{T}(0)
+                for kx = 1:nx
+                    xx = x0 + Δx * (kx - 1)
+                    tt = pp * xx
+                    phaseshift = exp(+ im * 2π * frequencies[kfft] * tt)
+                    zz = M[kfft,kx] * phaseshift
+                    semblance += zz
+                end
+                S[kfft,kp] = real(semblance * conj(semblance))
+            end
+        end
+    end
+
+    # perform the Tau-P transform
     for kp ∈ 1:np
         pp = pmin + (pmax - pmin) * (kp-1) / (np-1)
 
@@ -76,8 +103,8 @@ function JopTauP_FK_df!(d::AbstractArray{T,2}, m::AbstractArray{T,2}; nfft, t0, 
             for kx = 1:nx
                 xx = x0 + Δx * (kx - 1)
                 tt = pp * xx
-                phaseshift = exp(+ im * 2π * frequencies[kfft] * tt)
-                D[kfft,kp] += M[kfft,kx] * phaseshift
+                phaseshift = exp(- im * 2π * frequencies[kfft] * tt)
+                D[kfft,kp] += S[kfft,kp] * M[kfft,kx] * phaseshift
             end
         end
     end
@@ -95,7 +122,7 @@ end
 # 3. Forward Temporal Fourier transform: Tau-P to F-P
 # 2. Shift and sum for each P with temporal phase shifts: F-P to F-X
 # 1. Inverse temporal Fourier transforms: F-X to T-X
-function JopTauP_FK_df′!(m::AbstractArray{T,2}, d::AbstractArray{T,2}; nfft, t0, x0, Δt, Δx, vmin, taperTX, kwargs...) where {T}
+function JopTauP_FK_df′!(m::AbstractArray{T,2}, d::AbstractArray{T,2}; nfft, t0, x0, Δt, Δx, vmin, taperTX, weight, S, kwargs...) where {T}
     nt, nx, np = size(m,1), size(m,2), size(d,2)
 
     # Pad to nfft and compute real-to-complex temporal FFT (positive freqs)
@@ -121,8 +148,8 @@ function JopTauP_FK_df′!(m::AbstractArray{T,2}, d::AbstractArray{T,2}; nfft, t
             for kx = 1:nx
                 xx = x0 + Δx * (kx - 1)
                 tt = pp * xx
-                phaseshift = exp(- im * 2π * frequencies[kfft] * tt)
-                M[kfft,kx] += D[kfft,kp] * phaseshift
+                phaseshift = exp(+ im * 2π * frequencies[kfft] * tt)
+                M[kfft,kx] += S[kfft,kp] * D[kfft,kp] * phaseshift
             end
         end
     end

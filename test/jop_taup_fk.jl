@@ -11,7 +11,7 @@ using JetPackTransforms, Jets, LinearAlgebra, PyPlot, Serialization, Test
     @show t0,x0,Δt,Δx
 
     A = JopTauP_FK(JetSpace(T, nt, nx); t0=t0, x0=x0, Δt=Δt, Δx=Δx, padt=1, 
-        taperT=(0.05,0.05), taperX=(0.05,0.05), np=501, vmin=1000.0)
+        taperT=(0.05,0.05), taperX=(0.05,0.05), np=501, vmin=1000.0, weight=0)
     # A = JopTauP_FK(JetSpace(T, nt, nx); t0=t0, x0=x0, Δt=Δt, Δx=Δx, padt=1, 
     #     taperT=(0.0,0.0), taperX=(0.0,0.0), np=301, vmin=1000.0)
     m = zeros(domain(A))
