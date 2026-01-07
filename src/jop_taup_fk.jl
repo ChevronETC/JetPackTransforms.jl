@@ -52,24 +52,27 @@ function JopTauP_FK_df!(d::AbstractArray{T,2}, m::AbstractArray{T,2}; nfft, t0, 
     nt, nx, np = size(m,1), size(m,2), size(d,2)
     
     # Forward 1D temporal Fourier transform
+    # Use real-to-complex FFT: only non-negative temporal frequencies
+    nfreq = div(nfft,2) + 1
     mtaper = taperTX * m
-    M = zeros(Complex{T}, nfft, nx)
+    M = zeros(Complex{T}, nfreq, nx)
     mtmp = zeros(T, nfft)
     for kx ∈ 1:nx
         mtmp[1:nt] .= mtaper[:,kx]
-        M[:,kx] = fft(mtmp) .* (1 / sqrt(nfft))
+        M[:,kx] = rfft(mtmp) .* (1 / sqrt(nfft))
     end
     
     # shift and sum f-k to f-p by sinc interpolation
-    D = zeros(Complex{T}, nfft, np)
+    D = zeros(Complex{T}, nfreq, np)
     pmin = - 1000 / vmin
     pmax = + 1000 / vmin
     frequencies = convert(Array{T}, fftfreq(nfft, 1 / Δt))
+    frequencies = frequencies[1:nfreq] # only non-negative frequencies
 
     for kp ∈ 1:np
         pp = pmin + (pmax - pmin) * (kp-1) / (np-1)
 
-        for kfft = 1:nfft
+        for kfft = 1:nfreq
             for kx = 1:nx
                 xx = x0 + Δx * (kx - 1)
                 tt = pp * xx
@@ -79,13 +82,13 @@ function JopTauP_FK_df!(d::AbstractArray{T,2}, m::AbstractArray{T,2}; nfft, t0, 
         end
     end
 
-    # Inverse 1D temporal Fourier transform
-    dtmp = zeros(Complex{T}, nfft, np)
+    # Inverse 1D temporal Fourier transform (irfft over positive freqs)
+    dtmp = zeros(T, nfft, np)
     for kp ∈ 1:np
-        dtmp[:,kp] = bfft(D[:,kp]) .* (1 / sqrt(nfft))
+        dtmp[:,kp] = irfft(D[:,kp] .* (1 / sqrt(nfft)), nfft)
     end
 
-    d .= real.(dtmp[1:nt,1:np])
+    d .= dtmp[1:nt,1:np]
 end
 
 # Adjoint Tau-P transform
@@ -95,25 +98,26 @@ end
 function JopTauP_FK_df′!(m::AbstractArray{T,2}, d::AbstractArray{T,2}; nfft, t0, x0, Δt, Δx, vmin, taperTX, kwargs...) where {T}
     nt, nx, np = size(m,1), size(m,2), size(d,2)
 
-    dtmp = zeros(Complex{T}, nfft, np)
-    dtmp[1:nt,1:np] .= d
-    
-    # Forward 1D Fourier temporal and spatial transforms
-    D = zeros(Complex{T}, nfft, np)
+    # Pad to nfft and compute real-to-complex temporal FFT (positive freqs)
+    nfreq = div(nfft,2) + 1
+    dpad = zeros(T, nfft)
+    D = zeros(Complex{T}, nfreq, np)
     for kp ∈ 1:np
-        D[:,kp] = fft(dtmp[:,kp]) .* (1 / sqrt(nfft))
+        dpad[1:nt] .= d[:,kp]
+        D[:,kp] = rfft(dpad) .* (1 / sqrt(nfft))
     end
 
     # shift and sum f-p to f-k by sinc interpolation
-    M = zeros(Complex{T}, nfft, nx)
+    M = zeros(Complex{T}, nfreq, nx)
     pmin = - 1000 / vmin
     pmax = + 1000 / vmin
     frequencies = convert(Array{T}, fftfreq(nfft, 1 / Δt))
+    frequencies = frequencies[1:nfreq] # only non-negative frequencies
 
     for kp ∈ 1:np
         pp = pmin + (pmax - pmin) * (kp-1) / (np-1)
 
-        for kfft = 1:nfft
+        for kfft = 1:nfreq
             for kx = 1:nx
                 xx = x0 + Δx * (kx - 1)
                 tt = pp * xx
@@ -123,11 +127,11 @@ function JopTauP_FK_df′!(m::AbstractArray{T,2}, d::AbstractArray{T,2}; nfft, t
         end
     end
 
-    # Inverse 1D temporal Fourier transform
-    mtmp = zeros(Complex{T}, nfft, nx)
+    # Inverse temporal transform from positive freqs back to time
+    mtmp = zeros(T, nfft, nx)
     for kx ∈ 1:nx
-        mtmp[:,kx] = bfft(M[:,kx]) .* (1 / sqrt(nfft))
+        mtmp[:,kx] = irfft(M[:,kx] .* (1 / sqrt(nfft)), nfft)
     end
 
-    m .= taperTX * real.(mtmp[1:nt,1:nx])
+    m .= taperTX * mtmp[1:nt,1:nx]
 end
