@@ -34,6 +34,8 @@ function JopTauP_FK_FP(
 
     nfft_t = nextprod([2,3,5,7], round(Int, nt * (1 + padt)))
     nfft_x = nextprod([2,3,5,7], round(Int, nx * (1 + padx)))
+    @show nt,nfft_t
+    @show nx,nfft_x
 
     # build the interpolation matrix
     (indexPtoK_T, indexPtoK_X, indexPtoK_P, matrixPtoK) = interpolation_matrix(nt,nx,np,nfft_t,nfft_x,Δt,Δx,vmin; interpsinc=interpsinc)
@@ -118,23 +120,24 @@ function interpolation_matrix(nt::Int64, nx::Int64, np::Int64, nfft_t::Int64, nf
                 kp1 = clamp(kp1, 1, np)
                 kp2 = clamp(kp2, 1, np)
 
+                sum = 0.0
                 for kp ∈ kp1:kp2
                     x = (pp - pvalues[kp]) / Δp;
 
-                    if abs(x)< sinclength
-                        push!(indexPtoK_T, kfft_t)
-                        push!(indexPtoK_X, kfft_x)
-                        push!(indexPtoK_P, kp + 0)
+                    push!(indexPtoK_T, kfft_t)
+                    push!(indexPtoK_X, kfft_x)
+                    push!(indexPtoK_P, kp)
 
-                        if abs(x) > tiny
-                            # push!(matrixPtoK, sin(π * x) / (π * x))   # more artifacts
-                            push!(matrixPtoK, sin(x) / (x))
-                        else
-                            # push!(matrixPtoK, 1)
-                            push!(matrixPtoK, cos(x))
-                        end 
-                    end
+                    if abs(x) > tiny
+                        # push!(matrixPtoK, sin(π * x) / (π * x))   # more artifacts
+                        push!(matrixPtoK, sin(x) / x)
+                    else
+                        # push!(matrixPtoK, 1)
+                        push!(matrixPtoK, cos(x))
+                    end 
+                    sum += matrixPtoK[end]
                 end
+                # @show sum
             end
         end
     end

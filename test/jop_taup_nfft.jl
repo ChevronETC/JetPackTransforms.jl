@@ -1,7 +1,7 @@
-using JetPackTransforms, Jets, LinearAlgebra, PyPlot, Serialization, Test
+using JetPackTransforms, Jets, LinearAlgebra, Printf, PyPlot, Serialization, Test
 
-# @testset "JopTauP_FK, shift test" for T in (Float32, ), perturb in (1,2,3,4,5)
-@testset "JopTauP_FK, shift test" for T in (Float32, ), perturb in (5,)
+# @testset "JopTauP_NFFT, shift test" for T in (Float32, ), perturb in (1,2,3,4,5)
+@testset "JopTauP_NFFT, shift test" for T in (Float32, ), perturb in (5,)
     io = open("shot_gather.jls", "r")
     (data,t0,x0,Δt,Δx) = deserialize(io)
     close(io)
@@ -10,10 +10,8 @@ using JetPackTransforms, Jets, LinearAlgebra, PyPlot, Serialization, Test
     @show nt,t0,Δt
     @show nx,x0,Δx
 
-    A = JopTauP_FK(JetSpace(T, nt, nx); t0=t0, x0=x0, Δt=Δt, Δx=Δx, padt=1, 
-        taperT=(0.05,0.05), taperX=(0.05,0.05), np=501, vmin=1000.0, weight=0)
-    # A = JopTauP_FK(JetSpace(T, nt, nx); t0=t0, x0=x0, Δt=Δt, Δx=Δx, padt=1, 
-    #     taperT=(0.0,0.0), taperX=(0.0,0.0), np=301, vmin=1000.0)
+    A = JopTauP_NFFT(JetSpace(T, nt, nx); t0=t0, x0=x0, Δt=Δt, Δx=Δx, padt=2, padx=2, 
+        taperT=(0.01,0.01), taperX=(0.01,0.01), np=501, vmin=1000.0)
     m = zeros(domain(A))
     if perturb == 1
         m[div(nt,2)-1:div(nt,2)+1,div(nx,2)-1:div(nx,2)+1] .= 1
@@ -55,8 +53,8 @@ using JetPackTransforms, Jets, LinearAlgebra, PyPlot, Serialization, Test
     savefig(filename, dpi=150)
 end
 
-@test_skip @testset "JopTauP_FK, dot product test" for T in (Float32, Float64)
-    A = JopTauP_FK(JetSpace(T, 64, 128); Δt=0.005, Δx=10.0, t0=0.0, x0=0.0)
+@test_skip @testset "JopTauP_NFFT, dot product test" for T in (Float32, Float64)
+    A = JopTauP_NFFT(JetSpace(T, 64, 128); Δt=0.005, Δx=10.0, t0=0.0, x0=0.0)
     lhs, rhs = dot_product_test(A, rand(domain(A)), rand(range(A)))
     dif = (lhs - rhs) / (lhs + rhs)
     @show lhs
@@ -65,8 +63,8 @@ end
     @test isapprox(lhs,rhs,rtol=1e-4)
 end
 
-# @testset "JopTauP_FK, correctness" begin
-#     A = JopTauP_FK(JetSpace(Float64, 64, 128); dz=10.0, dh=10.0, h0=-1000.0)
+# @testset "JopTauP_NFFT, correctness" begin
+#     A = JopTauP_NFFT(JetSpace(Float64, 64, 128); dz=10.0, dh=10.0, h0=-1000.0)
 #     m = zeros(domain(A))
 #     m[32,:] .= 1
 #     d = A*m

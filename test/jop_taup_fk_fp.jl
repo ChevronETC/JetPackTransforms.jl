@@ -1,4 +1,4 @@
-using JetPackTransforms, Jets, LinearAlgebra, PyPlot, Serialization, Test
+using JetPackTransforms, Jets, LinearAlgebra, Printf, PyPlot, Serialization, Test
 
 # @testset "JopTauP_FK_FP, shift test" for T in (Float32, ), perturb in (1,2,3,4,5)
 @testset "JopTauP_FK_FP, shift test" for T in (Float32, ), perturb in (5,)
@@ -6,12 +6,16 @@ using JetPackTransforms, Jets, LinearAlgebra, PyPlot, Serialization, Test
     (data,t0,x0,Δt,Δx) = deserialize(io)
     close(io)
     nt,nx = size(data)
-    @show t0,x0,Δt,Δx
-    x0 = -3.0
-    @show t0,x0,Δt,Δx
+    x0 = -3.0 + Δx # incorrect value in the serialized file
+    @show nt,t0,Δt
+    @show nx,x0,Δx
+
+    # for kt ∈ 1:nt
+    #     @printf("kt,nt,rms; %5d %5d %12.6e\n", kt, nt, sqrt(dot(data[kt,:], data[kt,:]) / nx))
+    # end
 
     A = JopTauP_FK_FP(JetSpace(T, nt, nx); t0=t0, x0=x0, Δt=Δt, Δx=Δx, padt=2, padx=2, 
-        taperT=(0.05,0.05), taperX=(0.05,0.05), np=501, vmin=1000.0, interpsinc=1)
+        taperT=(0.01,0.01), taperX=(0.01,0.01), np=501, vmin=1000.0, interpsinc=1)
     m = zeros(domain(A))
     if perturb == 1
         m[div(nt,2)-1:div(nt,2)+1,div(nx,2)-1:div(nx,2)+1] .= 1

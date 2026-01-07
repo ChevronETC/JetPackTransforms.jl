@@ -8,6 +8,7 @@ for file in ("jop_dct.jl",
              "jop_sft.jl",
              "jop_slantstack.jl",
              "jop_taup_fk.jl",
-             "jop_taup_fk_fp.jl")
+             "jop_taup_fk_fp.jl",
+             "jop_taup_nfft.jl")
     include(file)
 end
