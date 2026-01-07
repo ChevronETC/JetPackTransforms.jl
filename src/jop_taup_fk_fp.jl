@@ -84,28 +84,18 @@ function interpolation_matrix(nt::Int64, nx::Int64, np::Int64, nfft_t::Int64, nf
                 p2 = pvalues[ip+1]
                 dp = (pp - p1) / (p2 - p1)
 
-                # @printf("it,ix,kt,kx,p1,pp,p2,dp; %4d %4d %+8.6f %+8.6f %+8.6f %+8.6f %+8.6f %+8.6f\n",kfft_t,kfft_x,kt,kx,p1,pp,p2,dp)
-
                 push!(indexPtoK_T, kfft_t)
                 push!(indexPtoK_X, kfft_x)
                 push!(indexPtoK_P, ip + 0)
                 push!(matrixPtoK, dp)
-                # push!(matrixPtoK, 1 - dp)
 
                 push!(indexPtoK_T, kfft_t)
                 push!(indexPtoK_X, kfft_x)
                 push!(indexPtoK_P, ip + 1)
                 push!(matrixPtoK, 1 - dp)
-                # push!(matrixPtoK, dp)
             end
         end
     end
-
-    # write(stdout,"\n")
-    # @show size(indexPtoK_T)
-    # @show size(indexPtoK_X)
-    # @show size(indexPtoK_P)
-    # @show size(matrixPtoK)
 
     (indexPtoK_T, indexPtoK_X, indexPtoK_P, matrixPtoK)
 end
