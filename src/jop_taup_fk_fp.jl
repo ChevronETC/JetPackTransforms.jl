@@ -11,6 +11,7 @@ The additional named optional arguments along with their default values are:
   `vmin=5000` maximum velocity for ray parameter sampling (m/s)
   `np`=201 number of ray parameters to sample in [-vmin,+vmin]
   `padt=1.0,padx=1.0` - fractional padding in depth and offset to apply before applying the Fourier transfrom
+  `interpsinc=1` - use linear (0) or sinc (1) interpolation for the F-K to F-P mapping, default is sinc  
 """
 function JopTauP_FK_FP(
         dom::JetAbstractSpace{T};
@@ -24,7 +25,7 @@ function JopTauP_FK_FP(
         padx = 1.0,
         taperT = (0.0,0.0),
         taperX = (0.0,0.0),
-        ) where {T}
+        interpsinc = 1) where {T}
     Δt < 0.0 && error("expected Δt > 0.0, got Δt=$(Δt)")
     Δx < 0.0 && error("expected Δh > 0.0, got Δx=$(Δx)")
 
@@ -35,7 +36,7 @@ function JopTauP_FK_FP(
     nfft_x = nextprod([2,3,5,7], round(Int, nx * (1 + padx)))
 
     # build the interpolation matrix
-    (indexPtoK_T, indexPtoK_X, indexPtoK_P, matrixPtoK) = interpolation_matrix(nt,nx,np,nfft_t,nfft_x,Δt,Δx,vmin)
+    (indexPtoK_T, indexPtoK_X, indexPtoK_P, matrixPtoK) = interpolation_matrix(nt,nx,np,nfft_t,nfft_x,Δt,Δx,vmin; interpsinc=interpsinc)
 
     # T-X taper
     taperTX = JopTaper(dom, (1,2), (taperT[1],taperX[1]), (taperT[2],taperX[2]))
@@ -69,29 +70,71 @@ function interpolation_matrix(nt::Int64, nx::Int64, np::Int64, nfft_t::Int64, nf
     matrixPtoK = T[]
 
     # start at kfft_t=2 to avoid kt=0 and division by zero in p = kx / kt
-    for kfft_t ∈ 2:nfft_t
-        kt = ktvalues[kfft_t]
 
-        for kfft_x ∈ 1:nfft_x
-            kx = kxvalues[kfft_x]
-            pp = kx / kt
+    if interpsinc == 0
+        @info "linear interpolation"
+        for kfft_t ∈ 2:nfft_t
+            kt = ktvalues[kfft_t]
 
-            if pp > pmin && pp < pmax
-                ip = Int64(floor((pp - pmin) / Δp) + 1)
-                ip = clamp(ip, 1, np-1)
-                p1 = pvalues[ip+0]
-                p2 = pvalues[ip+1]
-                dp = (pp - p1) / (p2 - p1)
+            for kfft_x ∈ 1:nfft_x
+                kx = kxvalues[kfft_x]
+                pp = kx / kt
 
-                push!(indexPtoK_T, kfft_t)
-                push!(indexPtoK_X, kfft_x)
-                push!(indexPtoK_P, ip + 0)
-                push!(matrixPtoK, dp)
+                if pp > pmin && pp < pmax
+                    kp = Int64(floor((pp - pmin) / Δp) + 1)
+                    kp = clamp(kp, 1, np-1)
+                    p1 = pvalues[kp+0]
+                    p2 = pvalues[kp+1]
+                    dp = (pp - p1) / (p2 - p1)
 
-                push!(indexPtoK_T, kfft_t)
-                push!(indexPtoK_X, kfft_x)
-                push!(indexPtoK_P, ip + 1)
-                push!(matrixPtoK, 1 - dp)
+                    push!(indexPtoK_T, kfft_t)
+                    push!(indexPtoK_X, kfft_x)
+                    push!(indexPtoK_P, kp + 0)
+                    push!(matrixPtoK, dp)
+
+                    push!(indexPtoK_T, kfft_t)
+                    push!(indexPtoK_X, kfft_x)
+                    push!(indexPtoK_P, kp + 1)
+                    push!(matrixPtoK, 1 - dp)
+                end
+            end
+        end
+    else
+        @info "sinc interpolation"
+		sinclength2 = sinclength + 1;
+        tiny = 2^(-24)
+
+        for kfft_t ∈ 2:nfft_t
+            kt = ktvalues[kfft_t]
+
+            for kfft_x ∈ 1:nfft_x
+                kx = kxvalues[kfft_x]
+                pp = kx / kt
+
+                kp1 = Int64(floor((pp - sinclength2 * Δp - pmin) / Δp) + 1)
+                kp2 = Int64(floor((pp + sinclength2 * Δp - pmin) / Δp) + 1)
+
+                kp1 = clamp(kp1, 1, np-1)
+                kp2 = clamp(kp2, 1, np-1)
+
+                for kp ∈ kp1:kp2
+                    x = (pp - pvalues[kp]) / Δp;
+
+                    if abs(x)< sinclength
+                        push!(indexPtoK_T, kfft_t)
+                        push!(indexPtoK_X, kfft_x)
+                        push!(indexPtoK_P, kp + 0)
+
+                        if abs(x) > tiny
+                            push!(matrixPtoK, sin(π * x) / (π * x))
+                        else
+                            # push!(matrixPtoK, cos(x))
+
+                            # Use Taylor expansion for small x: 1 - (πx)^2 / 6
+                            push!(matrixPtoK, 1 - (π*x)^2 / 6)
+                        end 
+                    end
+                end
             end
         end
     end
