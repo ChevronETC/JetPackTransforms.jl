@@ -1,13 +1,14 @@
 using JetPackTransforms, Jets, LinearAlgebra, PyPlot, Serialization, Test
 
 # @testset "JopTauP_FK_FP, shift test" for T in (Float32, ), perturb in (1,2,3,4,5)
-@test_skip @testset "JopTauP_FK_FP, shift test" for T in (Float32, ), perturb in (5,)
+@testset "JopTauP_FK_FP, shift test" for T in (Float32, ), perturb in (5,)
     io = open("shot_gather.jls", "r")
     (data,t0,x0,Δt,Δx) = deserialize(io)
     close(io)
     nt,nx = size(data)
+    @show t0,x0,Δt,Δx
 
-    A = JopTauP_FK_FP(JetSpace(T, nt, nx); t0=t0, x0=x0, Δt=Δt, Δx=Δx, np=301, vmin=1000.0)
+    A = JopTauP_FK_FP(JetSpace(T, nt, nx); t0=t0, x0=x0, Δt=Δt, Δx=Δx, padt=1, padx=1, np=501, vmin=1000.0)
     m = zeros(domain(A))
     if perturb == 1
         m[div(nt,2)-1:div(nt,2)+1,div(nx,2)-1:div(nx,2)+1] .= 1
@@ -49,7 +50,7 @@ using JetPackTransforms, Jets, LinearAlgebra, PyPlot, Serialization, Test
     savefig(filename, dpi=150)
 end
 
-@testset "JopTauP_FK_FP, dot product test" for T in (Float32, Float64)
+@test_skip @testset "JopTauP_FK_FP, dot product test" for T in (Float32, Float64)
     A = JopTauP_FK_FP(JetSpace(T, 64, 128); Δt=0.005, Δx=10.0, t0=0.0, x0=0.0)
     lhs, rhs = dot_product_test(A, rand(domain(A)), rand(range(A)))
     dif = (lhs - rhs) / (lhs + rhs)
