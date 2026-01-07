@@ -55,7 +55,7 @@ export JopTauP_FK_FP
 # interpsinc: linear(0) or sinc(1) interpolation, default linear
 # sinclength: number of points to use in the sinc interpolation kernel, default 8
 function interpolation_matrix(nt::Int64, nx::Int64, np::Int64, nfft_t::Int64, nfft_x::Int64, 
-        Δt::T, Δx::T, vmin::T; interpsinc::Int64=0, sinclength::Int64=8) where {T}
+        Δt::T, Δx::T, vmin::T; interpsinc::Int64=0) where {T}
     pmin = - 1000 / vmin
     pmax = + 1000 / vmin
     pvalues = [pmin + (pmax - pmin) * (i-1) / (np-1) for i in 1:np]
@@ -101,7 +101,8 @@ function interpolation_matrix(nt::Int64, nx::Int64, np::Int64, nfft_t::Int64, nf
         end
     else
         @info "sinc interpolation"
-		sinclength2 = sinclength + 1;
+        sinclength = 8
+		sinclength2 = max(1, div(sinclength,2))
         tiny = 2^(-24)
 
         for kfft_t ∈ 2:nfft_t
@@ -114,8 +115,8 @@ function interpolation_matrix(nt::Int64, nx::Int64, np::Int64, nfft_t::Int64, nf
                 kp1 = Int64(floor((pp - sinclength2 * Δp - pmin) / Δp) + 1)
                 kp2 = Int64(floor((pp + sinclength2 * Δp - pmin) / Δp) + 1)
 
-                kp1 = clamp(kp1, 1, np-1)
-                kp2 = clamp(kp2, 1, np-1)
+                kp1 = clamp(kp1, 1, np)
+                kp2 = clamp(kp2, 1, np)
 
                 for kp ∈ kp1:kp2
                     x = (pp - pvalues[kp]) / Δp;
@@ -126,12 +127,11 @@ function interpolation_matrix(nt::Int64, nx::Int64, np::Int64, nfft_t::Int64, nf
                         push!(indexPtoK_P, kp + 0)
 
                         if abs(x) > tiny
-                            push!(matrixPtoK, sin(π * x) / (π * x))
+                            # push!(matrixPtoK, sin(π * x) / (π * x))   # more artifacts
+                            push!(matrixPtoK, sin(x) / (x))
                         else
-                            # push!(matrixPtoK, cos(x))
-
-                            # Use Taylor expansion for small x: 1 - (πx)^2 / 6
-                            push!(matrixPtoK, 1 - (π*x)^2 / 6)
+                            # push!(matrixPtoK, 1)
+                            push!(matrixPtoK, cos(x))
                         end 
                     end
                 end
