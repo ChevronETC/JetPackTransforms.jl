@@ -15,7 +15,7 @@ and the reflected wave
 Next we note the definition of the ray parameter ``p`` with incidence angle ``\theta_s`` and reflected angle ``\theta_g``, and assume that ``\theta=\theta_s=\theta_g``:
 
 ```math
-p = \frac{1}{c}(\sin\theta_g + \sin\theta_s) = \frac{2}{c}(\sin\theta) = \frac{2}{c}(\frac{ck_x}{\omega})
+p = \frac{1}{c}(\sin\theta_g + \sin\theta_s) = \frac{2}{c}(\sin\theta)
 ```
 
 The relation between the incidence angle and the plane wave is given by:
@@ -42,7 +42,7 @@ k_h   &= \sqrt{\frac{\omega^2}{c^2} - k_z^2} \tag{1}
 dividing both sides by ``\omega/c``,
 
 ```math
-\frac{ck_h}{\omega} = \sqrt{1 - \frac{ck_z}{\omega}}
+\frac{ck_h}{\omega} = \sqrt{1 - \left(\frac{ck_z}{\omega}\right)^2}
 ```
 
 note that ``p=k_h/\omega`` so that,
