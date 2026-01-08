@@ -14,8 +14,8 @@ using JetPackTransforms, Jets, Test
     @test isapprox(lhs,rhs,rtol=1e-4)
 end
 
-@testset "JetSlantStack, correctness" begin
-    A = JopSlantStack(JetSpace(Float64, 64, 128); dz=10.0, dh=10.0, h0=-1000.0)
+@testset "JetSlantStack, correctness" for padz in (0.0, 0.2)
+    A = JopSlantStack(JetSpace(Float64, 64, 128); dz=10.0, dh=10.0, h0=-1000.0, padz)
     m = zeros(domain(A))
     m[32,:] .= 1
     d = A*m
