@@ -1,6 +1,6 @@
 module JetPackTransforms
 
-using FFTW, FINUFFT, JetPack, Jets, LinearAlgebra, NFFT, Printf, Wavelets
+using FFTW, FINUFFT, JetPack, Jets, LinearAlgebra, Printf, Wavelets
 
 include("jop_dct.jl")
 include("jop_dwt.jl")
