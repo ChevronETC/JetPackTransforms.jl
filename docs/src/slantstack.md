@@ -60,7 +60,7 @@ Substituting equation 2 into equation 1 gives,
 ```math
 \begin{aligned}
 k_h^2 &= k_z^2\left(1 - (cp)^2\right)^{-1} - k_z^2 \\
-k_h   &= k_z\left[\left(1 - (cp)^2\right)^{-1} - 1\right] \tag{3}
+k_h   &= k_z\left[\left(1 - (cp)^2\right)^{-1/2} - 1\right] \tag{3}
 \end{aligned}
 ```
 
