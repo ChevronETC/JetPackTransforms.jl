@@ -1,5 +1,3 @@
-using Serialization
-
 """
     A = JopSlantStack(dom[; dz=10.0, dh=10.0, h0=-1000.0, ...])
 
@@ -56,7 +54,7 @@ function JopSlantStack(
     end
 
     # c*p
-    cp = sin.(.5*theta*pi/180) # factor of .5 is to make theta the opening angle -- i.e. go from (theta_s, theta_g)->theta
+    cp = @. sin(deg2rad(theta)/2) # factor of 1/2 is to make theta the opening angle -- i.e. go from (theta_s, theta_g)->theta
 
     # conversions
     kz,kh,cp = map(x->convert(Array{T,1}, x), (kz,kh,cp))
@@ -80,6 +78,16 @@ function JopSlantStack_df!(d::AbstractArray{T,2}, m::AbstractArray{T,2}; nzfft, 
 
     M = rfft(mpad)
 
+    # adjoint of conjugate symmetry in kh
+    for ikz = 1:div(nzfft,2)+1
+        for ikh = 2:div(nhfft,2)
+            M[ikz,ikh] = M[ikz,ikh] + conj(M[ikz,nhfft-ikh+2])
+        end
+        for ikh = div(nhfft,2)+1:nhfft
+            M[ikz,ikh] = 0
+        end
+    end
+
     D = zeros(eltype(M), size(M,1), np)
     for ikz = 1:div(nzfft,2)+1, ip = 1:np
         ikh_m1, ikh_p1, _kh = slantstack_compute_kh(ikz, ip, cp, kz, kh, nhfft)
@@ -94,8 +102,6 @@ function JopSlantStack_df!(d::AbstractArray{T,2}, m::AbstractArray{T,2}; nzfft, 
 
         D[ikz,ip] = a_m1*d_m1 + a_p1*d_p1
     end
-
-    serialize("D.bin", D)
 
     d .= brfft(TK*D, nzfft, 1)[1:nz,1:np] ./ nzfft
 end
@@ -123,7 +129,10 @@ function JopSlantStack_df′!(m::AbstractArray{T,2}, d::AbstractArray{T,2}; nzff
         M[ikz,ikh_m1] += a_m1*m_m1
     end
 
-    serialize("M.bin", M)
+    # conjugate symmetry in kh
+    for ikz = 1:div(nzfft,2)+1, ikh = 2:div(nhfft,2)
+        M[ikz,nhfft-ikh+2] = conj(M[ikz,ikh])
+    end
 
     m .= TX * (brfft(M, nzfft)[1:nz,1:nh])
 end
