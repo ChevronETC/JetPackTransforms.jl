@@ -1,3 +1,5 @@
+using Serialization
+
 """
     A = JopSlantStack(dom[; dz=10.0, dh=10.0, h0=-1000.0, ...])
 
@@ -77,37 +79,23 @@ function JopSlantStack_df!(d::AbstractArray{T,2}, m::AbstractArray{T,2}; nzfft, 
     mpad[1:nz,1:nh] = TX*m
 
     M = rfft(mpad)
-    dtmp = similar(d)
 
     D = zeros(eltype(M), size(M,1), np)
     for ikz = 1:div(nzfft,2)+1, ip = 1:np
         ikh_m1, ikh_p1, _kh = slantstack_compute_kh(ikz, ip, cp, kz, kh, nhfft)
 
-        ikh_m1 < 1 && continue
+        (ikh_m1 < 1 || ikh_p1 > div(nhfft,2)+1) && continue
 
-        if ikh_m1 == ikh_p1
-            D[ikz,ip] = M[ikz,ikh_p1]*exp(-im*kh[ikh_p1]*h0)
-            continue
-        end
+        d_p1 = M[ikz,ikh_p1]*exp(-im*kh[ikh_p1]*h0)
+        a_p1 = abs(kh[ikh_p1] - _kh)/dh
 
-        local d_p1, a_p1
-        if 1 <= ikh_p1 <= nhfft
-            d_p1 = M[ikz,ikh_p1]*exp(-im*kh[ikh_p1]*h0)
-            a_p1 = abs(kh[ikh_p1] - _kh)/dh
-        else
-            a_p1 = 0.0
-        end
-
-        local d_m1, a_m1
-        if 1 <= ikh_m1 <= nhfft
-            d_m1 = M[ikz,ikh_m1]*exp(-im*kh[ikh_m1]*h0)
-            a_m1 = abs(_kh - kh[ikh_m1])/dh
-        else
-            a_m1 = 0.0
-        end
+        d_m1 = M[ikz,ikh_m1]*exp(-im*kh[ikh_m1]*h0)
+        a_m1 = abs(_kh - kh[ikh_m1])/dh
 
         D[ikz,ip] = a_m1*d_m1 + a_p1*d_p1
     end
+
+    serialize("D.bin", D)
 
     d .= brfft(TK*D, nzfft, 1)[1:nz,1:np] ./ nzfft
 end
@@ -124,25 +112,19 @@ function JopSlantStack_df′!(m::AbstractArray{T,2}, d::AbstractArray{T,2}; nzff
     for ikz = 1:div(nzfft,2)+1, ip = 1:np
         ikh_m1, ikh_p1, _kh = slantstack_compute_kh(ikz, ip, cp, kz, kh, nhfft)
 
-        ikh_m1 < 1 && continue
+        (ikh_m1 < 1 || ikh_p1 > div(nhfft,2)+1) && continue
 
-        if ikh_m1 == ikh_p1
-            M[ikz,ikh_p1] += D[ikz,ip]*exp(im*kh[ikh_p1]*h0)
-            continue
-        end
+        m_p1 = D[ikz,ip]*exp(im*kh[ikh_p1]*h0)
+        a_p1 = (kh[ikh_p1] - _kh)/dh
+        M[ikz,ikh_p1] += a_p1*m_p1
 
-        if 1 <= ikh_p1 <= nhfft
-            m_p1 = D[ikz,ip]*exp(im*kh[ikh_p1]*h0)
-            a_p1 = (kh[ikh_p1] - _kh)/dh
-            M[ikz,ikh_p1] += a_p1*m_p1
-        end
-
-        if 1 <= ikh_m1 <= nhfft
-            m_m1 = D[ikz,ip]*exp(im*kh[ikh_m1]*h0)
-            a_m1 = (_kh - kh[ikh_m1])/dh
-            M[ikz,ikh_m1] += a_m1*m_m1
-        end
+        m_m1 = D[ikz,ip]*exp(im*kh[ikh_m1]*h0)
+        a_m1 = (_kh - kh[ikh_m1])/dh
+        M[ikz,ikh_m1] += a_m1*m_m1
     end
+
+    serialize("M.bin", M)
+
     m .= TX * (brfft(M, nzfft)[1:nz,1:nh])
 end
 
