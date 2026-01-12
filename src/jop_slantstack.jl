@@ -94,6 +94,11 @@ function JopSlantStack_df!(d::AbstractArray{T,2}, m::AbstractArray{T,2}; nzfft, 
 
         (ikh_m1 < 1 || ikh_p1 > div(nhfft,2)+1) && continue
 
+        if ikh_m1 == ikh_p1
+            D[ikz,ip] = M[ikz,ikh_m1]*exp(-im*kh[ikh_m1]*h0)
+            continue
+        end
+
         d_p1 = M[ikz,ikh_p1]*exp(-im*kh[ikh_p1]*h0)
         a_p1 = abs(kh[ikh_p1] - _kh)/dh
 
@@ -120,6 +125,11 @@ function JopSlantStack_df′!(m::AbstractArray{T,2}, d::AbstractArray{T,2}; nzff
 
         (ikh_m1 < 1 || ikh_p1 > div(nhfft,2)+1) && continue
 
+        if ikh_m1 == ikh_p1
+            M[ikz,ikh_p1] += D[ikz,ip]*exp(im*kh[ikh_p1]*h0)
+            continue
+        end
+
         m_p1 = D[ikz,ip]*exp(im*kh[ikh_p1]*h0)
         a_p1 = (kh[ikh_p1] - _kh)/dh
         M[ikz,ikh_p1] += a_p1*m_p1
@@ -144,8 +154,6 @@ end
 
     ikh_m1 = floor(Int64, _kh/kh[2]) + 1
     ikh_p1 = ceil(Int64, _kh/kh[2]) + 1
-    ikh_m1 = ikh_m1 < 1 ? nhfft + ikh_m1 : ikh_m1
-    ikh_p1 = ikh_p1 < 1 ? nhfft + ikh_p1 : ikh_p1
 
     ikh_m1, ikh_p1, _kh
 end
