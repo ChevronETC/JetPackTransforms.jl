@@ -1,3 +1,4 @@
+using Serialization
 """
     A = JopSlantStack(dom[; dz=10.0, dh=10.0, h0=-1000.0, ...])
 
@@ -66,7 +67,7 @@ function JopSlantStack(
     TK = JopTaper(JetSpace(Complex{eltype(dom)},div(nzfft,2)+1,length(cp)), (1,2), (taperkz[1], taperkh[1]), (taperkz[2], taperkh[2]), mode=(:normal,:fftshift))
 
     JopLn(dom = dom, rng = JetSpace(T, nz, length(cp)), df! = JopSlantStack_df!, df′! = JopSlantStack_df′!,
-        s = (nzfft=nzfft, nhfft=nhfft, kz=kz, kh=kh, cp=cp, h0=h0, TX=TX, TK=TK))
+        s = (;nzfft, nhfft, kz, kh, cp, h0, TX, TK))
 end
 export JopSlantStack
 
@@ -76,17 +77,24 @@ function JopSlantStack_df!(d::AbstractArray{T,2}, m::AbstractArray{T,2}; nzfft, 
     mpad = zeros(T, nzfft, nhfft)
     mpad[1:nz,1:nh] = TX*m
 
+    serialize("fmpad.bin", mpad)
+
     M = rfft(mpad)
+
+    serialize("fM.bin", M)
 
     # adjoint of conjugate symmetry in kh
     for ikz = 1:div(nzfft,2)+1
         for ikh = 2:div(nhfft,2)
-            M[ikz,ikh] = M[ikz,ikh] + conj(M[ikz,nhfft-ikh+2])
+            M[ikz,ikh] += conj(M[ikz,nhfft-ikh+2])
+            # M[ikz,ikh] += M[ikz,nhfft-ikh+2]
         end
-        for ikh = div(nhfft,2)+1:nhfft
+        for ikh = div(nhfft,2)+2:nhfft
             M[ikz,ikh] = 0
         end
     end
+
+    serialize("fM2.bin", M)
 
     D = zeros(eltype(M), size(M,1), np)
     for ikz = 1:div(nzfft,2)+1, ip = 1:np
@@ -108,6 +116,8 @@ function JopSlantStack_df!(d::AbstractArray{T,2}, m::AbstractArray{T,2}; nzfft, 
         D[ikz,ip] = a_m1*d_m1 + a_p1*d_p1
     end
 
+    serialize("D.bin", D)
+
     d .= brfft(TK*D, nzfft, 1)[1:nz,1:np] ./ nzfft
 end
 
@@ -117,7 +127,11 @@ function JopSlantStack_df′!(m::AbstractArray{T,2}, d::AbstractArray{T,2}; nzff
     dpad = zeros(T, nzfft, np)
     dpad[1:nz,:] = d
 
+    serialize("adpad.bin", dpad)
+
     D = TK * (rfft(dpad, 1) ./ nzfft)
+
+    serialize("aD.bin", D)
 
     M = zeros(Complex{T}, div(nzfft,2)+1, nhfft)
     for ikz = 1:div(nzfft,2)+1, ip = 1:np
@@ -142,7 +156,10 @@ function JopSlantStack_df′!(m::AbstractArray{T,2}, d::AbstractArray{T,2}; nzff
     # conjugate symmetry in kh
     for ikz = 1:div(nzfft,2)+1, ikh = 2:div(nhfft,2)
         M[ikz,nhfft-ikh+2] = conj(M[ikz,ikh])
+        # M[ikz,nhfft-ikh+2] = M[ikz,ikh]
     end
+
+    serialize("M.bin", M)
 
     m .= TX * (brfft(M, nzfft)[1:nz,1:nh])
 end
