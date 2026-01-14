@@ -39,6 +39,8 @@ function JopSlantStack(
 
     # kz
     nzfft = nextprod([2,3,5,7], round(Int, nz*(1 + padz)))
+    npadz = nzfft-nz 
+    
     kn = pi/dz
     dk = kn/nzfft
     kz = dk*[0:div(nzfft,2)+1;]
@@ -67,15 +69,15 @@ function JopSlantStack(
     TK = JopTaper(JetSpace(Complex{eltype(dom)},div(nzfft,2)+1,length(cp)), (1,2), (taperkz[1], taperkh[1]), (taperkz[2], taperkh[2]), mode=(:normal,:fftshift))
 
     JopLn(dom = dom, rng = JetSpace(T, nz, length(cp)), df! = JopSlantStack_df!, df′! = JopSlantStack_df′!,
-        s = (;nzfft, nhfft, kz, kh, cp, h0, TX, TK))
+        s = (;nzfft, npadz, nhfft, kz, kh, cp, h0, TX, TK))
 end
 export JopSlantStack
 
-function JopSlantStack_df!(d::AbstractArray{T,2}, m::AbstractArray{T,2}; nzfft, nhfft, kz, kh, cp, h0, TX, TK, kwargs...) where {T}
+function JopSlantStack_df!(d::AbstractArray{T,2}, m::AbstractArray{T,2}; nzfft, npadz, nhfft, kz, kh, cp, h0, TX, TK, kwargs...) where {T}
     nz, nh, np, dh = size(m)..., length(cp), abs(kh[2]-kh[1])
 
     mpad = zeros(T, nzfft, nhfft)
-    mpad[1:nz,1:nh] = TX*m
+    mpad[div(npadz,2)+1:nz+div(npadz,2),1:nh] = TX*m
 
     serialize("fmpad.bin", mpad)
 
@@ -118,14 +120,14 @@ function JopSlantStack_df!(d::AbstractArray{T,2}, m::AbstractArray{T,2}; nzfft, 
 
     serialize("D.bin", D)
 
-    d .= brfft(TK*D, nzfft, 1)[1:nz,1:np] ./ nzfft
+    d .= brfft(TK*D, nzfft, 1)[div(npadz,2)+1:nz+div(npadz,2),1:np] ./ nzfft
 end
 
-function JopSlantStack_df′!(m::AbstractArray{T,2}, d::AbstractArray{T,2}; nzfft, nhfft, kz, kh, cp, h0, TX, TK, kwargs...) where {T}
+function JopSlantStack_df′!(m::AbstractArray{T,2}, d::AbstractArray{T,2}; nzfft, npadz, nhfft, kz, kh, cp, h0, TX, TK, kwargs...) where {T}
     nz, nh, np, dh = size(m)..., length(cp), abs(kh[2]-kh[1])
 
     dpad = zeros(T, nzfft, np)
-    dpad[1:nz,:] = d
+    dpad[div(npadz,2)+1:nz+div(npadz,2),:] = d
 
     serialize("adpad.bin", dpad)
 
@@ -161,7 +163,7 @@ function JopSlantStack_df′!(m::AbstractArray{T,2}, d::AbstractArray{T,2}; nzff
 
     serialize("M.bin", M)
 
-    m .= TX * (brfft(M, nzfft)[1:nz,1:nh])
+    m .= TX * (brfft(M, nzfft)[div(npadz,2)+1:nz+div(npadz,2),1:nh])
 end
 
 @inline function slantstack_compute_kh(ikz::Int64, ip::Int64, cp, kz, kh, nhfft)
