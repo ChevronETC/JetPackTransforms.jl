@@ -42,19 +42,16 @@ function JopSlantStack(
     dk = kn/nzfft
     kz = dk*[0:div(nzfft,2)+1;]
 
+    # symmetric zero padding for z
+    nz_pad_half = div(nzfft - nz, 2)
+    nz_pad_rng = (nz_pad_half+1):(nz_pad_half+nz)
+
     # kh
     nhfft = nextprod([2,3,5,7], round(Int, nh*(1+padh)))
-    kn = pi/dh
-    dk = kn/nhfft
-    local kh
-    if rem(nhfft,2) == 0
-        kh = 2*dk*[ [0:div(nhfft,2);] ; [-div(nhfft,2)+1:1:-1;] ] # factor of 2 is for kg+ks with kg=ks -- i.e. go from (kg,ks)->kh
-    else
-        kh = 2*dk*[ [0:div(nhfft,2);] ; [-div(nhfft,2)+0:1:-1;] ] # factor of 2 is for kg+ks with kg=ks -- i.e. go from (kg,ks)->kh
-    end
+    kh = 2 * fftfreq(nhfft, pi/dh)
 
     # c*p
-    cp = sin.(.5*theta*pi/180) # factor of .5 is to make theta the opening angle -- i.e. go from (theta_s, theta_g)->theta
+    cp = @. sin(deg2rad(theta)/2) # factor of 1/2 is to make theta the opening angle -- i.e. go from (theta_s, theta_g)->theta
 
     # conversions
     kz,kh,cp = map(x->convert(Array{T,1}, x), (kz,kh,cp))
@@ -66,57 +63,57 @@ function JopSlantStack(
     TK = JopTaper(JetSpace(Complex{eltype(dom)},div(nzfft,2)+1,length(cp)), (1,2), (taperkz[1], taperkh[1]), (taperkz[2], taperkh[2]), mode=(:normal,:fftshift))
 
     JopLn(dom = dom, rng = JetSpace(T, nz, length(cp)), df! = JopSlantStack_df!, df′! = JopSlantStack_df′!,
-        s = (nzfft=nzfft, nhfft=nhfft, kz=kz, kh=kh, cp=cp, h0=h0, TX=TX, TK=TK))
+        s = (;nzfft, nz_pad_rng, nhfft, kz, kh, cp, h0, TX, TK))
 end
 export JopSlantStack
 
-function JopSlantStack_df!(d::AbstractArray{T,2}, m::AbstractArray{T,2}; nzfft, nhfft, kz, kh, cp, h0, TX, TK, kwargs...) where {T}
-    nz, nh, np, dh = size(m)..., length(cp), abs(kh[2]-kh[1])
+function JopSlantStack_df!(d::AbstractArray{T,2}, m::AbstractArray{T,2}; nzfft, nz_pad_rng, nhfft, kz, kh, cp, h0, TX, TK, kwargs...) where {T}
+    nh, np, dh = size(m,2), length(cp), abs(kh[2]-kh[1])
 
     mpad = zeros(T, nzfft, nhfft)
-    mpad[1:nz,1:nh] = TX*m
+    mpad[nz_pad_rng,1:nh] = TX*m
 
     M = rfft(mpad)
-    dtmp = similar(d)
+
+    # adjoint of conjugate symmetry in kh
+    for ikz = 1:div(nzfft,2)+1
+        for ikh = 2:div(nhfft,2)
+            M[ikz,ikh] += conj(M[ikz,nhfft-ikh+2])
+            # M[ikz,ikh] += M[ikz,nhfft-ikh+2]
+        end
+        for ikh = div(nhfft,2)+2:nhfft
+            M[ikz,ikh] = 0
+        end
+    end
 
     D = zeros(eltype(M), size(M,1), np)
     for ikz = 1:div(nzfft,2)+1, ip = 1:np
         ikh_m1, ikh_p1, _kh = slantstack_compute_kh(ikz, ip, cp, kz, kh, nhfft)
 
-        ikh_m1 < 1 && continue
+        (ikh_m1 < 1 || ikh_p1 > div(nhfft,2)+1) && continue
 
         if ikh_m1 == ikh_p1
-            D[ikz,ip] = M[ikz,ikh_p1]*exp(-im*kh[ikh_p1]*h0)
+            D[ikz,ip] = M[ikz,ikh_m1]*exp(-im*kh[ikh_m1]*h0)
             continue
         end
 
-        local d_p1, a_p1
-        if 1 <= ikh_p1 <= nhfft
-            d_p1 = M[ikz,ikh_p1]*exp(-im*kh[ikh_p1]*h0)
-            a_p1 = abs(kh[ikh_p1] - _kh)/dh
-        else
-            a_p1 = 0.0
-        end
+        d_p1 = M[ikz,ikh_p1]*exp(-im*kh[ikh_p1]*h0)
+        a_p1 = abs(kh[ikh_p1] - _kh)/dh
 
-        local d_m1, a_m1
-        if 1 <= ikh_m1 <= nhfft
-            d_m1 = M[ikz,ikh_m1]*exp(-im*kh[ikh_m1]*h0)
-            a_m1 = abs(_kh - kh[ikh_m1])/dh
-        else
-            a_m1 = 0.0
-        end
+        d_m1 = M[ikz,ikh_m1]*exp(-im*kh[ikh_m1]*h0)
+        a_m1 = abs(_kh - kh[ikh_m1])/dh
 
         D[ikz,ip] = a_m1*d_m1 + a_p1*d_p1
     end
 
-    d .= brfft(TK*D, nzfft, 1)[1:nz,1:np] ./ nzfft
+    d .= brfft(TK*D, nzfft, 1)[nz_pad_rng,1:np] ./ nzfft
 end
 
-function JopSlantStack_df′!(m::AbstractArray{T,2}, d::AbstractArray{T,2}; nzfft, nhfft, kz, kh, cp, h0, TX, TK, kwargs...) where {T}
-    nz, nh, np, dh = size(m)..., length(cp), abs(kh[2]-kh[1])
+function JopSlantStack_df′!(m::AbstractArray{T,2}, d::AbstractArray{T,2}; nzfft, nz_pad_rng, nhfft, kz, kh, cp, h0, TX, TK, kwargs...) where {T}
+    nh, np, dh = size(m,2)..., length(cp), abs(kh[2]-kh[1])
 
     dpad = zeros(T, nzfft, np)
-    dpad[1:nz,:] = d
+    dpad[nz_pad_rng,:] = d
 
     D = TK * (rfft(dpad, 1) ./ nzfft)
 
@@ -124,26 +121,29 @@ function JopSlantStack_df′!(m::AbstractArray{T,2}, d::AbstractArray{T,2}; nzff
     for ikz = 1:div(nzfft,2)+1, ip = 1:np
         ikh_m1, ikh_p1, _kh = slantstack_compute_kh(ikz, ip, cp, kz, kh, nhfft)
 
-        ikh_m1 < 1 && continue
+        (ikh_m1 < 1 || ikh_p1 > div(nhfft,2)+1) && continue
 
         if ikh_m1 == ikh_p1
             M[ikz,ikh_p1] += D[ikz,ip]*exp(im*kh[ikh_p1]*h0)
             continue
         end
 
-        if 1 <= ikh_p1 <= nhfft
-            m_p1 = D[ikz,ip]*exp(im*kh[ikh_p1]*h0)
-            a_p1 = (kh[ikh_p1] - _kh)/dh
-            M[ikz,ikh_p1] += a_p1*m_p1
-        end
+        m_p1 = D[ikz,ip]*exp(im*kh[ikh_p1]*h0)
+        a_p1 = (kh[ikh_p1] - _kh)/dh
+        M[ikz,ikh_p1] += a_p1*m_p1
 
-        if 1 <= ikh_m1 <= nhfft
-            m_m1 = D[ikz,ip]*exp(im*kh[ikh_m1]*h0)
-            a_m1 = (_kh - kh[ikh_m1])/dh
-            M[ikz,ikh_m1] += a_m1*m_m1
-        end
+        m_m1 = D[ikz,ip]*exp(im*kh[ikh_m1]*h0)
+        a_m1 = (_kh - kh[ikh_m1])/dh
+        M[ikz,ikh_m1] += a_m1*m_m1
     end
-    m .= TX * (brfft(M, nzfft)[1:nz,1:nh])
+
+    # conjugate symmetry in kh
+    for ikz = 1:div(nzfft,2)+1, ikh = 2:div(nhfft,2)
+        M[ikz,nhfft-ikh+2] = conj(M[ikz,ikh])
+        # M[ikz,nhfft-ikh+2] = M[ikz,ikh]
+    end
+
+    m .= TX * (brfft(M, nzfft)[nz_pad_rng,1:nh])
 end
 
 @inline function slantstack_compute_kh(ikz::Int64, ip::Int64, cp, kz, kh, nhfft)
@@ -153,8 +153,6 @@ end
 
     ikh_m1 = floor(Int64, _kh/kh[2]) + 1
     ikh_p1 = ceil(Int64, _kh/kh[2]) + 1
-    ikh_m1 = ikh_m1 < 1 ? nhfft + ikh_m1 : ikh_m1
-    ikh_p1 = ikh_p1 < 1 ? nhfft + ikh_p1 : ikh_p1
 
     ikh_m1, ikh_p1, _kh
 end
