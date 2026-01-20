@@ -1,6 +1,6 @@
 # JopSlantStack
 
-The slant stack is implemented in the wave-number domain using a change of variables from the vertical wave-number ``k_z`` and the horizontal offset wave-number ``k_h`` to the ray parameter ``p_h``.  The change of variables is defined via a mapping from ``k_z`` and ``p`` to ``k_h`` that is derived from dispersion relations for the downward propagating wave 
+The slant stack is implemented in one of two modes (time or depth).  In depth mode, the implemenation is the wave-number domain with a change of variables from the vertical wave-number ``k_z`` and the horizontal offset wave-number ``k_h`` to the ray parameter ``p_h``.  In the time mode, the implementation is in the frequency/wave-number domain with a change of variables from frequency ``\omega`` and ``k_h`` to ``p_h``.  The change of variables is defined via a mapping from ``k_z`` and ``p`` to ``k_h`` that is derived from dispersion relations for the downward propagating wave 
 
 ```math
 \frac{\omega^2}{c^2} = k_{gx}^2 + k_{gz}^2
@@ -24,11 +24,16 @@ The relation between the incidence angle and the plane wave is given by:
 \sin(\theta) = \frac{k_x}{\omega/c}
 ```
 
-So that,
+So that the mapping between `k_h=2k_x` and `p` is,
 
 ```math
 p = 2\frac{k_x}{\omega}
 ```
+
+In time mode, this provides the mapping between ``k_h`` and ``p`` via the relation:
+```math
+d(\omega,p) = \delta(k_h - p\omega)d(\omega,k_h)
+```s
 
 The offset wave-number is ``k_h=k_{sx}+k_{gx}`` and we make the assumption that ``k_{sx}=k_{gx}`` so that ``k_{sx}=k_{gx}=k_x``, ``k_h=2k_x`` and ``k_{gz}=k_{sz}=k_z``.  Now, we can find the mapping from ``p_h`` and ``k_z`` to ``k_h`` starting from the above dispersion relation we find:
 
@@ -64,7 +69,7 @@ k_h   &= k_z\left[\left(1 - (cp)^2\right)^{-1/2} - 1\right] \tag{3}
 \end{aligned}
 ```
 
-We use equation 3 to map between ``k_h`` and ``p`` via the relation:
+In depth mode, we use equation 3 to map between ``k_h`` and ``p`` via the relation:
 ```math
 d(k_z,p) = \delta(k_h - (k_z\left[\left(1 - (cp)^2\right)^{-1/2} - 1\right]))d(k_z,k_h)
 ```
