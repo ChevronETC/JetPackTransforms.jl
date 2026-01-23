@@ -1,76 +1,46 @@
 # JopSlantStack
 
-The slant stack is implemented in one of two modes (time or depth).  In depth mode, the implemenation is the wave-number domain with a change of variables from the vertical wave-number ``k_z`` and the horizontal offset wave-number ``k_h`` to the ray parameter ``p_h``.  In the time mode, the implementation is in the frequency/wave-number domain with a change of variables from frequency ``\omega`` and ``k_h`` to ``p_h``.  The change of variables is defined via a mapping from ``k_z`` and ``p`` to ``k_h`` that is derived from dispersion relations for the downward propagating wave 
+The slant stack is implemented in one of two modes (time or depth).  In depth mode, the implementation is the wave-number domain with a change of variables from the vertical wavenumber ``k_z`` and the horizontal subsurface half-offset wavenumber ``k_h`` to the angle of incidence (half of opening angle) ``\theta`` measured with respect to the normal to a planar reflector. An application of this mode would be the conversion of subsurface offset gathers (SSOG) into angle gathers (SSAG). In time mode, the implementation is in the frequency/wavenumber domain with a change of variables from frequency ``\omega`` and surface offset wavenumber ``k_h`` to the ray parameter ``p``. An application of this mode would be the tau-p transform of shot gathers. The change of variables is defined via a mapping from ``k_z`` and ``\theta`` (or ``p``) to ``k_h``. 
+
+We start by noting the definition of the ray parameter ``p`` with takeoff angle ``\gamma`` (with respect to the vertical)
 
 ```math
-\frac{\omega^2}{c^2} = k_{gx}^2 + k_{gz}^2
+p = \frac{\sin\gamma}{c}.
 ```
 
-and the reflected wave
+Note that the ray parameter is preserved in the system for each wave. The relation between the takoff angle and the plane wave can be derived from the dispersion relation and is given by
 
 ```math
-\frac{\omega^2}{c^2} = k_{sx}^2 + k_{sz}^2.
+\sin(\gamma) = \frac{k_x}{\omega/c},
 ```
 
-Next we note the definition of the ray parameter ``p`` with incidence angle ``\theta_s`` and reflected angle ``\theta_g``, and assume that ``\theta=\theta_s=\theta_g``:
+so that the mapping between ``k_h=k_x`` and ``p`` is
 
 ```math
-p = \frac{1}{c}(\sin\theta_g + \sin\theta_s) = \frac{2}{c}(\sin\theta)
+p = \frac{k_x}{\omega}.
 ```
 
-The relation between the incidence angle and the plane wave is given by:
-
+In time mode, this provides the mapping between ``k_h`` and ``p`` via the relation
 ```math
-\sin(\theta) = \frac{k_x}{\omega/c}
+d(\omega,p) = \delta(k_h - p\omega)d(\omega,k_h).
 ```
 
-So that the mapping between `k_h=2k_x` and `p` is,
+In depth mode, we start from the extended imaging condition between source and receiver plane waves
 
 ```math
-p = 2\frac{k_x}{\omega}
+I(x,z,h) = e^{i(k_{sx}(x+h)+k_{sz}z)} e^{-i(k_{rx}(x-h)+k_{rz}z)}=e^{i((k_{sx}-k_{rx})x + (k_{sz}-k_{rz})z + (k_{sx}+k_{rx})h)}.
 ```
 
-In time mode, this provides the mapping between ``k_h`` and ``p`` via the relation:
-```math
-d(\omega,p) = \delta(k_h - p\omega)d(\omega,k_h)
-```s
-
-The offset wave-number is ``k_h=k_{sx}+k_{gx}`` and we make the assumption that ``k_{sx}=k_{gx}`` so that ``k_{sx}=k_{gx}=k_x``, ``k_h=2k_x`` and ``k_{gz}=k_{sz}=k_z``.  Now, we can find the mapping from ``p_h`` and ``k_z`` to ``k_h`` starting from the above dispersion relation we find:
+The image vertical wavenumber and subsurface half-offset wavenumber at a reflection point are given by ``(k_z,k_h) = (k_{sz}-k_{rz}, k_{sx}+k_{rx})``. Assuming a horizontal reflector, we have ``k_{sx} = k_{rx}``, ``k_{sz} = -k_{rz}``, and ``\gamma_s = 2\pi - \gamma_r = \theta - \pi``. Given that ``\frac{k_{sx}}{k_{sz}} = -\tan(\gamma_s)`` we deduce
 
 ```math
-\begin{aligned}
-k_h^2 &= \frac{\omega^2}{c^2} - k_z^2 \\
-k_h   &= \sqrt{\frac{\omega^2}{c^2} - k_z^2} \tag{1}
-\end{aligned}
+k_h = 2k_{sx} = -2k_{sz}\tan(\gamma_s) = -k_z \tan(\theta).
 ```
 
-dividing both sides by ``\omega/c``,
+With some trigonometric manipulations, it can be shown that this relation still holds for non-horizontal reflections.
+
+Thus, the mapping between ``k_h`` and ``\theta`` is given by
 
 ```math
-\frac{ck_h}{\omega} = \sqrt{1 - \left(\frac{ck_z}{\omega}\right)^2}
+d(k_z,\theta) = \delta(k_h + k_z \tan(\theta))d(k_z,k_h).
 ```
-
-note that ``p=k_h/\omega`` so that,
-
-```math
-\begin{aligned}
-cp                              &= \sqrt{1 - \left(\frac{ck_z}{\omega}\right)^2} \\
-(cp)^2                          &= 1 - \left(\frac{ck_z}{\omega}\right)^2 \\
-\left(\frac{c}{\omega}\right)^2 &= \frac{1}{k_z^2}\left(1 - (cp)^2\right) \tag{2}
-\end{aligned}
-```
-
-Substituting equation 2 into equation 1 gives,
-
-```math
-\begin{aligned}
-k_h^2 &= k_z^2\left(1 - (cp)^2\right)^{-1} - k_z^2 \\
-k_h   &= k_z\left[\left(1 - (cp)^2\right)^{-1/2} - 1\right] \tag{3}
-\end{aligned}
-```
-
-In depth mode, we use equation 3 to map between ``k_h`` and ``p`` via the relation:
-```math
-d(k_z,p) = \delta(k_h - (k_z\left[\left(1 - (cp)^2\right)^{-1/2} - 1\right]))d(k_z,k_h)
-```
-

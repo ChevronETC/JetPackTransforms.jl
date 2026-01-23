@@ -1,4 +1,4 @@
-using JetPackTransforms, Jets, Test
+using JetPackTransforms, Jets, Test, LinearAlgebra
 
 # depth mode
 @testset "JetSlantStack, dot product test" for T in (Float32, Float64)
@@ -22,7 +22,7 @@ end
     d = A*m
     v,i = findmax(d)
     @test i[1] == 32
-    @test i[2] == findfirst(x->x≈0, state(A).cp)
+    @test i[2] == findfirst(x->x≈0, state(A).tant)
 end
 
 # time mode
@@ -47,4 +47,32 @@ end
     d = A*m
     v,i = findmax(d)
     @test i[1] == 32
+end
+
+# depth-time parity test
+@testset "JetSlantStack, parity" begin
+    theta = collect(-45:0.5:45)
+    # the ray parameters that would give the same results as theta is
+    # p = -tan(θ)
+    p = @. -tan(deg2rad(theta))
+    
+    Ad = JopSlantStack(JetSpace(Float64, 128, 129); mode="depth", theta=theta, p=p, dz=0.01, dh=0.01, h0=-0.64, padz=1, padh=1, taperkz = (0.5,0.5), taperkh = (0.5,0.5))
+    At = JopSlantStack(JetSpace(Float64, 128, 129); mode="time" , theta=theta, p=p, dz=0.01, dh=0.01, h0=-0.64, padz=1, padh=1, taperkz = (0.5,0.5), taperkh = (0.5,0.5))
+    m = zeros(domain(Ad))
+    for i = 1:129
+        m[div(i,4)+20,i] = 1.0
+    end
+    m[16,64] = 1
+    m[64,96] = 1
+    dd = Ad*m
+    dt = At*m
+
+    md = Ad'*dd
+    mt = At'*dt
+
+    err_d = maximum(abs.(dd .- dt)) / maximum(abs.(dd))
+    err_m = maximum(abs.(md .- mt)) / maximum(abs.(md))
+    @show err_d, err_m
+    @test err_d < 1e-7
+    @test err_m < 1e-7
 end
