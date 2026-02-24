@@ -109,19 +109,22 @@ end
     d2 = A2*m
 
     # check cosine similarity of the results since the two operators are not exactly the same
-    err_d = dot(d1, d2) / (norm(d1) * norm(d2))
+    similarity = dot(d1, d2) / (norm(d1) * norm(d2))
 
-    @show err_d
-    @test err_d > 0.95
+    @show similarity
+    @test similarity > 0.95
 end
 
 @testset "JetSlantStackShiftSum3D, dot product test, T = $(T), mode = $(mode), dip = $(dip)" for T in (Float32, Float64), mode in ("depth", "time"), (dip, azimuth) in ((0.0,0.0), (30.0, 60.0), ([0.0], [0.0]))
     if isa(dip, Array)
-        dip = 90 .* rand(64)
-        azimuth = 360 .* rand(64)
+        dip = 90 .* rand(32)
+        azimuth = 360 .* rand(32)
     end
-    A = JopSlantStackShiftSum3D(JetSpace(T, 64, 128); dz=10.0, mode=mode, hx = 10.0 .* rand(128) .- 5, hy = 10.0 .* rand(128) .- 5,  dip=dip, azimuth=azimuth)
+    A = JopSlantStackShiftSum3D(JetSpace(T, 32, 64); dz=10.0, mode=mode, hx = 10.0 .* rand(64) .- 5, hy = 10.0 .* rand(64) .- 5,  dip=dip, azimuth=azimuth)
+    lhs, rhs = dot_product_test(A,rand(domain(A)),rand(range(A)))
+    @test isapprox(lhs,rhs,rtol=1e-4)
 
+    A = JopSlantStackShiftSum3D(JetSpace(T, 32, 8, 8); dz=10.0, mode=mode, hx = 10.0 .* rand(8) .- 5, hy = 10.0 .* rand(8) .- 5,  dip=dip, azimuth=azimuth)
     lhs, rhs = dot_product_test(A,rand(domain(A)),rand(range(A)))
     @test isapprox(lhs,rhs,rtol=1e-4)
 end
@@ -180,6 +183,37 @@ end
 
     d1 = A1*m
     d2 = A2*m
+
+    err_d = maximum(abs.(d1 .- d2)) / maximum(abs.(d1))
+
+    @show err_d
+    @test err_d < 1e-7
+end
+
+@testset "JetSlantStackShiftSum3D, offsets parity" begin
+    theta = collect(-45:5.0:45)
+    phi = collect(0.0:45.0:135.0)
+
+    hx_reg = collect(-0.6:0.1:0.6)
+    hy_reg = collect(-0.3:0.1:0.2)
+    nhx = length(hx_reg)
+    nhy = length(hy_reg)
+    nh = nhx * nhy
+    hx_irreg = repeat(hx_reg, outer=nhy)
+    hy_irreg = repeat(hy_reg, inner=nhx)
+    
+    A1 = JopSlantStackShiftSum3D(JetSpace(Float64, 64, nhx, nhy); mode="depth", theta=theta, phi = phi, dz=0.01, hx=hx_reg, hy=hy_reg, dip = 30.0, azimuth = 45.0)
+    A2 = JopSlantStackShiftSum3D(JetSpace(Float64, 64, nh); mode="depth", theta=theta, phi = phi, dz=0.01, hx=hx_irreg, hy=hy_irreg, dip = 30.0, azimuth = 45.0)
+    m1 = zeros(domain(A1))
+    for i = 1:nhy
+        m1[div(i,4)+20,:,i] .= 1.0
+    end
+    m1[16,3,2] = 1
+    m1[32,2, 4] = -1
+    m2 = reshape(m1, 64, nh)
+    
+    d1 = A1*m1
+    d2 = A2*m2
 
     err_d = maximum(abs.(d1 .- d2)) / maximum(abs.(d1))
 

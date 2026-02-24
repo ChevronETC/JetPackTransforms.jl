@@ -374,6 +374,22 @@ function JopSlantStackShiftSum3D_df′!(m::AbstractArray{T,2}, d::AbstractArray{
     end
 end
 
+function JopSlantStackShiftSum3D_df!(d::AbstractArray{T,3}, m::AbstractArray{T,3}; dip, azimuth, mode, dz, hx, hy, px, py, TZ, kwargs...) where {T}
+    if isa(dip, Array)
+        JopSlantStackShiftSum3D_df_vector!(d, m; dip, azimuth, mode, dz, hx, hy, px, py, TZ)
+    else
+        JopSlantStackShiftSum3D_df_scalar!(d, m; dip, azimuth, mode, dz, hx, hy, px, py, TZ)
+    end
+end
+
+function JopSlantStackShiftSum3D_df′!(m::AbstractArray{T,3}, d::AbstractArray{T,3}; dip, azimuth, mode, dz, hx, hy, px, py, TZ, kwargs...) where {T}
+    if isa(dip, Array)
+        JopSlantStackShiftSum3D_df_vector′!(m, d; dip, azimuth, mode, dz, hx, hy, px, py, TZ, kwargs...)
+    else
+        JopSlantStackShiftSum3D_df_scalar′!(m, d; dip, azimuth, mode, dz, hx, hy, px, py, TZ, kwargs...)
+    end
+end
+
 function JopSlantStackShiftSum3D_df_scalar!(d::AbstractArray{T,3}, m::AbstractArray{T,2}; dip::Real, azimuth::Real, mode, dz, hx, hy, px, py, TZ) where {T}
     nz, nh, npx, npy = size(m,1), size(m,2), length(px), length(py)
 
@@ -404,6 +420,38 @@ function JopSlantStackShiftSum3D_df_scalar!(d::AbstractArray{T,3}, m::AbstractAr
     d
 end
 
+function JopSlantStackShiftSum3D_df_scalar!(d::AbstractArray{T,3}, m::AbstractArray{T,3}; dip::Real, azimuth::Real, mode, dz, hx, hy, px, py, TZ) where {T}
+    nz, nhx, nhy, npx, npy = size(m,1), size(m,2), size(m,3), length(px), length(py)
+
+    if mode == "time"
+        compute_shift = slantstack_shift_px_py
+    elseif dip == 0
+        compute_shift = slantstack_shift_theta_phi
+    else
+        compute_shift = slantstack_shift_theta_phi_geologic
+    end
+
+    d .= 0
+    mtap = TZ * m
+    @threads for ipx = 1:npx
+        holder = zeros(T, nz)
+        for ipy = 1:npy
+            num = tan(dip)^2 *sin(azimuth - py[ipy])*cos(azimuth - py[ipy])
+            denom = sqrt(1 + (tan(dip)*sin(azimuth - py[ipy]))^2)
+            for ihx = 1:nhx
+                for ihy = 1:nhy
+                    shift = compute_shift(1, ihx, ihy, ipx, ipy, hx, hy, px, py, dz, num, denom)
+                    if abs(shift) < nz
+                        WaveFD.shiftforward!(WaveFD.shiftfilter(shift), holder, @view(mtap[:,ihx,ihy]))
+                        d[:,ipx,ipy] .+= holder
+                    end
+                end
+            end
+        end
+    end
+    d
+end
+
 function JopSlantStackShiftSum3D_df_vector!(d::AbstractArray{T,3}, m::AbstractArray{T,2}; dip::AbstractArray{T,1}, azimuth::AbstractArray{T,1}, mode, dz, hx, hy, px, py, TZ) where {T}
     nz, nh, npx, npy = size(m,1), size(m,2), length(px), length(py)
 
@@ -422,6 +470,34 @@ function JopSlantStackShiftSum3D_df_vector!(d::AbstractArray{T,3}, m::AbstractAr
                     if abs(shift) < nz 
                         WaveFD.shiftforward!(WaveFD.shiftfilter(shift), holder, @view(mtap[:,ih]))
                         d[iz,ipx,ipy] += holder[iz]
+                    end
+                end
+            end
+        end
+    end
+    d
+end
+
+function JopSlantStackShiftSum3D_df_vector!(d::AbstractArray{T,3}, m::AbstractArray{T,3}; dip::AbstractArray{T,1}, azimuth::AbstractArray{T,1}, mode, dz, hx, hy, px, py, TZ) where {T}
+    nz, nhx, nhy, npx, npy = size(m,1), size(m,2), size(m,3), length(px), length(py)
+
+    compute_shift = slantstack_shift_theta_phi_geologic
+    
+    d .= 0
+    mtap = TZ * m
+    @threads for ipx = 1:npx
+        holder = zeros(T, nz)
+        for ipy = 1:npy
+            num = tan.(dip).^2 .* sin.(azimuth .- py[ipy]) .* cos.(azimuth .- py[ipy])
+            denom = sqrt.(1 .+ (tan.(dip) .* sin.(azimuth .- py[ipy])).^2)
+            for ihx = 1:nhx
+                for ihy = 1:nhy
+                    for iz = 1:nz
+                        shift = compute_shift(iz, ihx, ihy, ipx, ipy, hx, hy, px, py, dz, num, denom)
+                        if abs(shift) < nz 
+                            WaveFD.shiftforward!(WaveFD.shiftfilter(shift), holder, @view(mtap[:,ihx,ihy]))
+                            d[iz,ipx,ipy] += holder[iz]
+                        end
                     end
                 end
             end
@@ -462,6 +538,40 @@ function JopSlantStackShiftSum3D_df_scalar′!(m::AbstractArray{T,2}, d::Abstrac
     m
 end
 
+function JopSlantStackShiftSum3D_df_scalar′!(m::AbstractArray{T,3}, d::AbstractArray{T,3}; dip::Real, azimuth::Real, mode, dz, hx, hy, px, py, TZ, kwargs...) where {T}
+    nz, nhx, nhy, npx, npy = size(m,1), size(m,2), size(m,3), length(px), length(py)
+
+    if mode == "time"
+        compute_shift = slantstack_shift_px_py
+    elseif dip == 0
+        compute_shift = slantstack_shift_theta_phi
+    else
+        compute_shift = slantstack_shift_theta_phi_geologic
+    end
+
+    mtap = zeros(T, nz, nhx, nhy)
+    @threads for ihx = 1:nhx
+        for ihy = 1:nhy
+            acc = zeros(T, nz)
+            holder = zeros(T, nz)
+            for ipx = 1:npx
+                for ipy = 1:npy
+                    num = tan(dip)^2 *sin(azimuth - py[ipy])*cos(azimuth - py[ipy])
+                    denom = sqrt(1 + (tan(dip)*sin(azimuth - py[ipy]))^2)
+                    shift = compute_shift(1, ihx, ihy, ipx, ipy, hx, hy, px, py, dz, num, denom)
+                    if abs(shift) < nz
+                        WaveFD.shiftadjoint!(WaveFD.shiftfilter(shift), holder, @view(d[:,ipx,ipy]))
+                        acc .+= holder
+                    end
+                end
+            end
+            mtap[:,ihx,ihy] .= acc
+        end
+    end
+    m = TZ' * mtap
+    m
+end
+
 function JopSlantStackShiftSum3D_df_vector′!(m::AbstractArray{T,2}, d::AbstractArray{T,3}; dip::AbstractArray{T,1}, azimuth::AbstractArray{T,1}, mode, dz, hx, hy, px, py, TZ, kwargs...) where {T}
     nz, nh, npx, npy = size(m,1), size(m,2), length(px), length(py)
 
@@ -482,6 +592,37 @@ function JopSlantStackShiftSum3D_df_vector′!(m::AbstractArray{T,2}, d::Abstrac
                         holder[iz] = d[iz,ipx,ipy]
                         WaveFD.shiftadjoint!(WaveFD.shiftfilter(shift), acc, holder)
                         mtap[:,ih] .+= acc
+                    end
+                end
+            end
+        end
+    end
+    m = TZ' * mtap
+    m
+end
+
+function JopSlantStackShiftSum3D_df_vector′!(m::AbstractArray{T,3}, d::AbstractArray{T,3}; dip::AbstractArray{T,1}, azimuth::AbstractArray{T,1}, mode, dz, hx, hy, px, py, TZ, kwargs...) where {T}
+    nz, nhx, nhy, npx, npy = size(m,1), size(m,2), size(m,3), length(px), length(py)
+
+    compute_shift = slantstack_shift_theta_phi_geologic
+
+    mtap = zeros(T, nz, nhx, nhy)
+    @threads for ihx = 1:nhx
+        for ihy = 1:nhy
+            acc = zeros(T, nz)
+            holder = zeros(T, nz)
+            for ipx = 1:npx
+                for ipy = 1:npy
+                    num = tan.(dip).^2 .* sin.(azimuth .- py[ipy]) .* cos.(azimuth .- py[ipy])
+                    denom = sqrt.(1 .+ (tan.(dip) .* sin.(azimuth .- py[ipy])).^2)
+                    for iz = 1:nz
+                        shift = compute_shift(iz, ihx, ihy, ipx, ipy, hx, hy, px, py, dz, num, denom)
+                        if abs(shift) < nz
+                            fill!(holder, zero(T))
+                            holder[iz] = d[iz,ipx,ipy]
+                            WaveFD.shiftadjoint!(WaveFD.shiftfilter(shift), acc, holder)
+                            mtap[:,ihx,ihy] .+= acc
+                        end
                     end
                 end
             end
