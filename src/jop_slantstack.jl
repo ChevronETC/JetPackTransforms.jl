@@ -12,8 +12,8 @@ along with their default values are,
 * `padz=0.0,padh=0.0` - fractional padding in depth and offset to apply before applying the Fourier transform
 * `taperz=(0,0)` - beginning and end taper (fractional) in the z-direction (or t-direction) before transforming from `z-h` to `kz-kh` or `t-h` to `f-kh`
 * `taperh=(0,0)` - beginning and end taper (fractional) in the h-direction before transforming from `z-h` to `kz-kh` or `t-h` to `f-kh`
-* `taperkz=(0,0)` - beginning and end taper (fractional) in the kz-direction (or frequency) before transforming from `kz-theta` to `z-h` or `f-p` to `t-h`
-* `taperkh=(0,0)` - beginning and end taper (fractional) in the kh-direction before transforming from `kz-theta` to `z-h` or `f-p` to `t-h`
+* `taperkz=(0,0)` - beginning and end taper (fractional) in the kz-direction (or frequency) before sampling
+* `taperkh=(0,0)` - beginning and end taper (fractional) in the kh-direction before sampling
 
 # Notes
 
@@ -64,7 +64,7 @@ function JopSlantStack(
 
     # tapers
     TX = JopTaper(dom, (1,2), (taperz[1],taperh[1]), (taperz[2],taperh[2]))
-    TK = JopTaper(JetSpace(Complex{eltype(dom)},div(nzfft,2)+1,mode=="time" ? length(p) : length(tant)), (1,2), (taperkz[1], taperkh[1]), (taperkz[2], taperkh[2]), mode=(:normal,:fftshift))
+    TK = JopTaper(JetSpace(Complex{eltype(dom)},div(nzfft,2)+1, nhfft), (1,2), (taperkz[1], taperkh[1]), (taperkz[2], taperkh[2]), mode=(:normal,:fftshift))
 
     JopLn(dom = dom, rng = JetSpace(T, nz, mode == "time" ? length(p) : length(tant)), df! = JopSlantStack_df!, df′! = JopSlantStack_df′!,
         s = (;mode, nzfft, nhfft, kz, kh, tant, p, h0, TX, TK))
@@ -78,7 +78,7 @@ function JopSlantStack_df!(d::AbstractArray{T,2}, m::AbstractArray{T,2}; mode, n
     mpad = zeros(T, nzfft, nhfft)
     mpad[1:nz,1:nh] = TX*m
 
-    M = rfft(mpad)
+    M = TK*rfft(mpad)
 
     compute_kh = mode == "depth" ? slantstack_compute_kh_from_kz : slantstack_compute_kh_from_frequency
     is_out_of_bounds = (ikh_m1, ikh_p1)->(ikh_m1 < 1 || ikh_p1 > nhfft)
@@ -103,7 +103,7 @@ function JopSlantStack_df!(d::AbstractArray{T,2}, m::AbstractArray{T,2}; mode, n
         D[ikz,ip] = a_m1*d_m1 + a_p1*d_p1
     end
 
-    _d = brfft(TK*D, nzfft, 1)
+    _d = brfft(D, nzfft, 1)
     d .= _d[1:nz,1:np] ./ nzfft
 end
 
@@ -114,7 +114,7 @@ function JopSlantStack_df′!(m::AbstractArray{T,2}, d::AbstractArray{T,2}; mode
     dpad = zeros(T, nzfft, np)
     dpad[1:nz,:] = d
 
-    D = TK * (rfft(dpad, 1) ./ nzfft)
+    D = (rfft(dpad, 1) ./ nzfft)
 
     compute_kh = mode == "depth" ? slantstack_compute_kh_from_kz : slantstack_compute_kh_from_frequency
     is_out_of_bounds = (ikh_m1, ikh_p1)->(ikh_m1 < 1 || ikh_p1 > nhfft)
@@ -140,7 +140,7 @@ function JopSlantStack_df′!(m::AbstractArray{T,2}, d::AbstractArray{T,2}; mode
         M[ikz,ikh_m1] += a_m1*m_m1
     end
 
-    m .= TX * (brfft(M, nzfft)[1:nz,1:nh])
+    m .= TX * (brfft(TK * M, nzfft)[1:nz,1:nh])
 end
 
 @inline function slantstack_compute_kh_from_kz(ikz::Int64, ip::Int64, tant, p, kz, kh, nhfft)
@@ -165,6 +165,271 @@ end
     ikh_p1 = ikh_p1 < 1 ? nhfft + ikh_p1 : ikh_p1
 
     ikh_m1, ikh_p1, _kh
+end
+
+"""
+    A = JopSlantStack3D(dom[; dz=1.0, dhx=1.0, dhy=1.0, hx0=0.0, hy0=0.0, ...])
+
+where `A` is the 3D slant-stack operator mapping for `z-hx-hy` to `z-θ-ϕ` (depth mode) or `t-hx-hy` to `tau-px-py` (time mode).
+The domain of the operator is `nz` x `nhx` x `nhy` with precision T, `dz` is the depth spacing (or time interval),
+`dhx` and `dhy` are the offset spacings, and `hx0` and `hy0` are the origins of the offset axes. The additional named optional arguments
+along with their default values are,
+
+* `mode="depth` - choose between "depth" and "time" to specify if the input domain is `z-hx-hy` or `t-hx-hy`.
+* `theta=-45:1.0:45` - range of incidence angles used when `mode="depth"`.
+* `phi=0:45.0:135` - range of azimuth angles used when `mode="depth"`.
+* `dip=0.0` - geologic dip (degrees) used when `mode="depth"`
+* `azimuth=0.0` - geologic azimuth (degrees) used when `mode="depth"`
+* `px=range(-dz/dhx,dz/dhx,64)` - ray parameter sampling used when `mode="time"`
+* `py=range(-dz/dhy,dz/dhy,64)` - ray parameter sampling used when `mode="time"`
+* `padz=0.0,padhx=0.0,padhy=0.0` - fractional padding in depth and offset to apply before applying the Fourier transform
+* `taperz=(0,0)` - beginning and end taper (fractional) in the z-direction (or t-direction) before transforming from `z-hx-hy` to `kz-khx-khy` or `t-hx-hy` to `f-khx-khy`
+* `taperhx=(0,0)` - beginning and end taper (fractional) in the hx-direction before transforming from `z-hx-hy` to `kz-khx-khy` or `t-hx-hy` to `f-khx-khy`
+* `taperhy=(0,0)` - beginning and end taper (fractional) in the hy-direction before transforming from `z-hx-hy` to `kz-khx-khy` or `t-hx-hy` to `f-khx-khy`
+* `taperkz=(0,0)` - beginning and end taper (fractional) in the kz-direction (or frequency) before sampling
+* `taperkhx=(0,0)` - beginning and end taper (fractional) in the khx-direction before sampling
+* `taperkhy=(0,0)` - beginning and end taper (fractional) in the khy-direction before sampling
+
+# Notes
+
+* If the mode is "time", then `padz` is the padding for the time dimension, `dz` is the time sampling interval, `taperz` is the taper for the time dimension and `tapkerkz` is the taper for frequency.
+* For mode="depth", typically `theta` needs to cover both positive and negative angles and must be < 90 degrees.
+* For mode="depth", the incidence angle depends on the geologic `dip` and `azimuth` (see 3-D Seismic Imaging by Prof. Biondo Biondi, Chapter 6). If not provided, this dependency is ignored.
+* Typically, geologic `dip` ∈ [0, 90] degrees and `azimuth` ∈ [0, 360] degrees, which is different from `theta` and `phi` ranges.
+* For mode="depth", only scalar `dip` and `azimuth` are supported, which means the same geologic angle is applied across the entire depth. This is a simplification and may not be accurate for complex geologies.
+"""
+function JopSlantStack3D(
+        dom::JetAbstractSpace{T};
+        theta = collect(-45.0:1.0:45.0),
+        phi = collect(0.0:45.0:135.0),
+        px = nothing,
+        py = nothing,
+        dz = 1.0,
+        dhx = 1.0,
+        dhy = 1.0,
+        hx0 = 0.0,
+        hy0 = 0.0,
+        padz = 0.0,
+        padhx = 0.0,
+        padhy = 0.0,
+        taperz = (0,0),
+        taperhx = (0,0),
+        taperhy = (0,0),
+        taperkz = (0,0),
+        taperkhx = (0,0),
+        taperkhy = (0,0),
+        dip = 0.0,
+        azimuth = 0.0,
+        mode = "depth") where {T}
+    mode ∈ ("depth", "time") || error("expected mode to be either 'depth' or 'time', got mode=$(mode)")
+    dz < 0.0 && error("expected dz>0.0, got dz=$(dz)")
+    dhx < 0.0 && error("expected dhx>0.0, got dhx=$(dhx)")
+    dhy < 0.0 && error("expected dhy>0.0, got dhy=$(dhy)")
+    mode == "depth" && any(abs.(theta) .>= 90.0) && error("for mode='depth', all theta values must be < 90 degrees in absolute value")
+
+    nz,nhx,nhy = size(dom)
+
+    # kz
+    nzfft = nextprod([2,3,5,7], round(Int, nz*(1 + padz)))
+    kz = rfftfreq(nzfft, 2*pi / dz)
+
+    # khx
+    nhxfft = nextprod([2,3,5,7], round(Int, nhx*(1+padhx)))
+    khx = fftfreq(nhxfft, 2*pi / dhx)
+
+    # khy
+    nhyfft = nextprod([2,3,5,7], round(Int, nhy*(1+padhy)))
+    khy = fftfreq(nhyfft, 2*pi / dhy)
+
+    # tan(theta), phi - used for mode=="depth"
+    tant = @. tan(deg2rad(theta))
+    phi = @. deg2rad(phi)
+
+    dip = deg2rad(dip)
+    azimuth = deg2rad(azimuth)
+
+    # p - used for both modes
+    if mode == "depth"
+        px = - tant
+        py = phi
+    elseif px === nothing || py === nothing
+        (px === nothing) && (px = collect(range(-dz/dhx, dz/dhx; length=64)))
+        (py === nothing) && (py = collect(range(-dz/dhy, dz/dhy; length=64)))
+    end
+
+    # conversions
+    kz,khx,khy,tant,phi,px,py = map(x->convert(Array{T,1}, x), (kz,khx,khy,tant,phi,px,py))
+    nzfft,nhxfft,nhyfft = map(x->convert(Int64, x), (nzfft,nhxfft,nhyfft))
+    hx0 = T(hx0)
+    hy0 = T(hy0)
+    dip = T(dip)
+    azimuth = T(azimuth)
+
+    # tapers
+    TX = JopTaper(dom, (1,2,3), (taperz[1],taperhx[1],taperhy[1]), (taperz[2],taperhx[2],taperhy[2]))
+    TK = JopTaper(JetSpace(Complex{eltype(dom)},div(nzfft,2)+1, nhxfft, nhyfft), (1,2,3), (taperkz[1], taperkhx[1], taperkhy[1]), (taperkz[2], taperkhx[2], taperkhy[2]), mode=(:normal,:fftshift,:fftshift))
+
+    JopLn(dom = dom, rng = JetSpace(T, nz, length(px), length(py)), df! = JopSlantStack3D_df!, df′! = JopSlantStack3D_df′!,
+        s = (;mode, nzfft, nhxfft, nhyfft, kz, khx, khy, px, py, hx0, hy0, dip, azimuth, TX, TK))
+end
+export JopSlantStack3D
+
+function JopSlantStack3D_df!(d::AbstractArray{T,3}, m::AbstractArray{T,3}; mode, nzfft, nhxfft, nhyfft, kz, khx, khy, px, py, hx0, hy0, dip, azimuth, TX, TK, kwargs...) where {T}
+    nhx, nhy, npx, npy, dhx, dhy = size(m,2), size(m,3), length(px), length(py), abs(khx[2]-khx[1]), abs(khy[2]-khy[1])
+    nz = size(d, 1)
+
+    mpad = zeros(T, nzfft, nhxfft, nhyfft)
+    mpad[1:nz,1:nhx,1:nhy] = TX*m
+    M = TK*rfft(mpad)
+
+    if mode == "time"
+        compute_kh = slantstack_khxy_from_frequency
+    elseif dip == 0
+        compute_kh = slantstack_khxy_from_kz
+    else
+        compute_kh = slantstack_khxy_from_kz_geologic
+    end
+
+    is_out_of_bounds = (ikhx_m1, ikhx_p1, ikhy_m1, ikhy_p1)->(ikhx_m1 < 1 || ikhx_p1 > nhxfft || ikhy_m1 < 1 || ikhy_p1 > nhyfft)
+
+    D = zeros(eltype(M), size(M,1), npx, npy)
+    @threads for ipx = 1:npx
+        for ipy = 1:npy
+            num = tan(dip)^2 *sin(azimuth - py[ipy])*cos(azimuth - py[ipy])
+            denom = sqrt(1 + (tan(dip)*sin(azimuth - py[ipy]))^2)
+            for ikz = 1:div(nzfft,2)+1
+                ikhx_m1, ikhx_p1, _khx, ikhy_m1, ikhy_p1, _khy = compute_kh(ikz, ipx, ipy, px, py, kz, khx, khy, nhxfft, nhyfft, num, denom)
+
+                is_out_of_bounds(ikhx_m1, ikhx_p1, ikhy_m1, ikhy_p1) && continue
+
+                if (ikhx_m1 == ikhx_p1) && (ikhy_m1 == ikhy_p1)
+                    D[ikz,ipx,ipy] = M[ikz,ikhx_m1,ikhy_m1]*exp(-im*(khx[ikhx_m1]*hx0 + khy[ikhy_m1]*hy0))
+                    continue
+                end
+
+                ax_m1 = (khx[ikhx_p1] - _khx)/dhx
+                ax_p1 = 1 - ax_m1
+                ay_m1 = (khy[ikhy_p1] - _khy)/dhy
+                ay_p1 = 1 - ay_m1
+
+                d_p1_p1 = M[ikz,ikhx_p1,ikhy_p1]*exp(-im*(khx[ikhx_p1]*hx0 + khy[ikhy_p1]*hy0))
+                d_p1_m1 = M[ikz,ikhx_p1,ikhy_m1]*exp(-im*(khx[ikhx_p1]*hx0 + khy[ikhy_m1]*hy0))
+                d_m1_p1 = M[ikz,ikhx_m1,ikhy_p1]*exp(-im*(khx[ikhx_m1]*hx0 + khy[ikhy_p1]*hy0))
+                d_m1_m1 = M[ikz,ikhx_m1,ikhy_m1]*exp(-im*(khx[ikhx_m1]*hx0 + khy[ikhy_m1]*hy0))
+
+                D[ikz,ipx,ipy] = ax_m1*ay_m1*d_m1_m1 + ax_m1*ay_p1*d_m1_p1 + ax_p1*ay_m1*d_p1_m1 + ax_p1*ay_p1*d_p1_p1
+            end
+        end
+    end
+
+    _d = brfft(D, nzfft, 1)
+    d .= _d[1:nz,1:npx,1:npy] ./ nzfft
+end
+
+function JopSlantStack3D_df′!(m::AbstractArray{T,3}, d::AbstractArray{T,3}; mode, nzfft, nhxfft, nhyfft, kz, khx, khy, px, py, hx0, hy0, dip, azimuth, TX, TK, kwargs...) where {T}
+    nhx, nhy, npx, npy, dhx, dhy = size(m,2), size(m,3), length(px), length(py), abs(khx[2]-khx[1]), abs(khy[2]-khy[1])
+    nz = size(d, 1)
+
+    dpad = zeros(T, nzfft, npx, npy)
+    dpad[1:nz,:,:] = d
+
+    D = (rfft(dpad, 1) ./ nzfft)
+
+    if mode == "time"
+        compute_kh = slantstack_khxy_from_frequency
+    elseif dip == 0
+        compute_kh = slantstack_khxy_from_kz
+    else
+        compute_kh = slantstack_khxy_from_kz_geologic
+    end
+
+    is_out_of_bounds = (ikhx_m1, ikhx_p1, ikhy_m1, ikhy_p1)->(ikhx_m1 < 1 || ikhx_p1 > nhxfft || ikhy_m1 < 1 || ikhy_p1 > nhyfft)
+
+    M = zeros(Complex{T}, div(nzfft,2)+1, nhxfft, nhyfft)
+    for ipx = 1:npx
+        for ipy = 1:npy
+            num = tan(dip)^2 *sin(azimuth - py[ipy])*cos(azimuth - py[ipy])
+            denom = sqrt(1 + (tan(dip)*sin(azimuth - py[ipy]))^2)
+            for ikz = 1:div(nzfft,2)+1
+                ikhx_m1, ikhx_p1, _khx, ikhy_m1, ikhy_p1, _khy = compute_kh(ikz, ipx, ipy, px, py, kz, khx, khy, nhxfft, nhyfft, num, denom)
+
+                is_out_of_bounds(ikhx_m1, ikhx_p1, ikhy_m1, ikhy_p1) && continue
+
+                if (ikhx_m1 == ikhx_p1) && (ikhy_m1 == ikhy_p1)
+                    M[ikz,ikhx_p1,ikhy_p1] += D[ikz,ipx,ipy]*exp(im*(khx[ikhx_p1]*hx0 + khy[ikhy_p1]*hy0))
+                    continue
+                end
+
+                ax_m1 = (khx[ikhx_p1] - _khx)/dhx
+                ax_p1 = 1 - ax_m1
+                ay_m1 = (khy[ikhy_p1] - _khy)/dhy
+                ay_p1 = 1 - ay_m1
+
+                m_p1_p1 = D[ikz,ipx,ipy]*exp(im*(khx[ikhx_p1]*hx0 + khy[ikhy_p1]*hy0))
+                m_p1_m1 = D[ikz,ipx,ipy]*exp(im*(khx[ikhx_p1]*hx0 + khy[ikhy_m1]*hy0))
+                m_m1_p1 = D[ikz,ipx,ipy]*exp(im*(khx[ikhx_m1]*hx0 + khy[ikhy_p1]*hy0))
+                m_m1_m1 = D[ikz,ipx,ipy]*exp(im*(khx[ikhx_m1]*hx0 + khy[ikhy_m1]*hy0))
+
+                M[ikz,ikhx_p1,ikhy_p1] += ax_p1*ay_p1*m_p1_p1
+                M[ikz,ikhx_p1,ikhy_m1] += ax_p1*ay_m1*m_p1_m1
+                M[ikz,ikhx_m1,ikhy_p1] += ax_m1*ay_p1*m_m1_p1
+                M[ikz,ikhx_m1,ikhy_m1] += ax_m1*ay_m1*m_m1_m1
+            end
+        end
+    end
+
+    m .= TX * (brfft(TK * M, nzfft)[1:nz,1:nhx,1:nhy])
+end
+
+@inline function slantstack_khxy_from_kz(ikz::Int64, ipx::Int64, ipy::Int64, px, py, kz, khx, khy, nhxfft, nhyfft, num, denom)
+    _khx = kz[ikz]*px[ipx]*cos(py[ipy])
+    _khy = kz[ikz]*px[ipx]*sin(py[ipy])
+
+    ikhx_m1 = floor(Int64, _khx/khx[2]) + 1
+    ikhx_p1 = ceil(Int64, _khx/khx[2]) + 1
+    ikhy_m1 = floor(Int64, _khy/khy[2]) + 1
+    ikhy_p1 = ceil(Int64, _khy/khy[2]) + 1
+
+    ikhx_m1 = ikhx_m1 < 1 ? nhxfft + ikhx_m1 : ikhx_m1
+    ikhx_p1 = ikhx_p1 < 1 ? nhxfft + ikhx_p1 : ikhx_p1
+    ikhy_m1 = ikhy_m1 < 1 ? nhyfft + ikhy_m1 : ikhy_m1
+    ikhy_p1 = ikhy_p1 < 1 ? nhyfft + ikhy_p1 : ikhy_p1
+
+    ikhx_m1, ikhx_p1, _khx, ikhy_m1, ikhy_p1, _khy
+end
+
+@inline function slantstack_khxy_from_kz_geologic(ikz::Int64, ipx::Int64, ipy::Int64, px, py, kz, khx, khy, nhxfft, nhyfft, num, denom)
+    _khx = kz[ikz]*px[ipx]*(cos(py[ipy])/denom + sin(py[ipy]*num/denom))
+    _khy = kz[ikz]*px[ipx]*(sin(py[ipy])/denom - cos(py[ipy]*num/denom))
+
+    ikhx_m1 = floor(Int64, _khx/khx[2]) + 1
+    ikhx_p1 = ceil(Int64, _khx/khx[2]) + 1
+    ikhy_m1 = floor(Int64, _khy/khy[2]) + 1
+    ikhy_p1 = ceil(Int64, _khy/khy[2]) + 1
+
+    ikhx_m1 = ikhx_m1 < 1 ? nhxfft + ikhx_m1 : ikhx_m1
+    ikhx_p1 = ikhx_p1 < 1 ? nhxfft + ikhx_p1 : ikhx_p1
+    ikhy_m1 = ikhy_m1 < 1 ? nhyfft + ikhy_m1 : ikhy_m1
+    ikhy_p1 = ikhy_p1 < 1 ? nhyfft + ikhy_p1 : ikhy_p1
+
+    ikhx_m1, ikhx_p1, _khx, ikhy_m1, ikhy_p1, _khy
+end
+
+@inline function slantstack_khxy_from_frequency(iω::Int64, ipx::Int64, ipy::Int64, px, py, ω, khx, khy, nhxfft, nhyfft, num, denom)
+    _khx = px[ipx]*ω[iω]
+    _khy = py[ipy]*ω[iω]
+
+    ikhx_m1 = floor(Int64, _khx/khx[2]) + 1
+    ikhx_p1 = ceil(Int64, _khx/khx[2]) + 1
+    ikhy_m1 = floor(Int64, _khy/khy[2]) + 1
+    ikhy_p1 = ceil(Int64, _khy/khy[2]) + 1
+
+    ikhx_m1 = ikhx_m1 < 1 ? nhxfft + ikhx_m1 : ikhx_m1
+    ikhx_p1 = ikhx_p1 < 1 ? nhxfft + ikhx_p1 : ikhx_p1
+    ikhy_m1 = ikhy_m1 < 1 ? nhyfft + ikhy_m1 : ikhy_m1
+    ikhy_p1 = ikhy_p1 < 1 ? nhyfft + ikhy_p1 : ikhy_p1
+
+    ikhx_m1, ikhx_p1, _khx, ikhy_m1, ikhy_p1, _khy
 end
 
 """
@@ -273,9 +538,9 @@ The domain of the operator is `nz` x `nh` (for irregular) or `nz` x `nhx` x `nhy
 `hx` and `hy`, if provided, are the arrays of offsets (can be irregular). If not provided, a regular grid is assumed with same sampling as dz.
 The additional named optional arguments along with their default values are,
 
-* `mode="depth` - choose between "depth" and "time" to specify if the input domain is `z-h` or `t-h`
+* `mode="depth` - choose between "depth" and "time" to specify if the input domain is `z-hx-hy` or `t-hx-hy`
 * `theta=-45:1.0:45` - range of incidence angles used when `mode="depth"`
-* `phi=0:45:135` - range of image azimuth angles used when `mode="depth"`
+* `phi=0:45.0:135` - range of image azimuth angles used when `mode="depth"`
 * `dip=0.0` - geologic dip used when `mode="depth"`
 * `azimuth=0.0` - geologic azimuth used when `mode="depth"`
 * `px=range(-dz/max(diff(hx)),dz/max(diff(hx)),64)` - ray parameter sampling used when `mode="time"`
@@ -285,8 +550,9 @@ The additional named optional arguments along with their default values are,
 # Notes
 
 * If the mode is "time", then `dz` is the time sampling interval, `taperz` is the taper for the time dimension.
-* For mode="depth", typically theta needs to cover both positive and negative angles and must be < 90 degrees.
-* For mode="depth", the incidence angle depends on the geologic dip and azimuth (see 3-D Seismic Imaging by Prof. Biondo Biondi, Chapter 6). If not provided, this dependence is ignored.
+* For mode="depth", typically `theta` needs to cover both positive and negative angles and must be < 90 degrees.
+* For mode="depth", the incidence angle depends on the geologic `dip` and `azimuth` (see 3-D Seismic Imaging by Prof. Biondo Biondi, Chapter 6). If not provided, this dependency is ignored.
+* Typically, geologic `dip` ∈ [0, 90] degrees and `azimuth` ∈ [0, 360] degrees, which is different from `theta` and `phi` ranges.
 """
 function JopSlantStackShiftSum3D(
         dom::JetAbstractSpace{T};
@@ -318,8 +584,8 @@ function JopSlantStackShiftSum3D(
     hy === nothing && (hy = collect(0.0:dz:(size(dom,3)-1)*dz))
     length(hx) != size(dom,2) && error("length of hx=$(length(hx)) must match the number of x-offsets in the domain=$(size(dom,2))")
     length(hy) != size(dom,ndy) && error("length of hy=$(length(hy)) must match the number of y-offsets in the domain=$(size(dom,ndy))")
-    dhxmax = maximum(diff(sort(hx)))
-    dhymax = maximum(diff(sort(hy)))
+    dhxmax = length(hx) > 1 ? maximum(diff(sort(hx))) : 1.0
+    dhymax = length(hy) > 1 ? maximum(diff(sort(hy))) : 1.0
     mode == "depth" && any(abs.(theta) .>= 90.0) && error("for mode='depth', theta values must be < 90 degrees in absolute value")
     mode == "depth" && (any(phi .> 180.0) || any(phi .< 0.0)) && error("for mode='depth', phi values must be between 0 and 180 degrees")
 
@@ -327,9 +593,12 @@ function JopSlantStackShiftSum3D(
     nhx = size(dom, 2)
     nhy = size(dom, ndy)
 
-    # tan(theta), cos(phi) - used for mode=="depth"
+    # tan(theta), phi - used for mode=="depth"
     tant = @. tan(deg2rad(theta))
     phi = @. deg2rad(phi)
+
+    dip = @. deg2rad(dip)
+    azimuth = @. deg2rad(azimuth)
 
     # p - used for both modes
     if mode == "depth"
