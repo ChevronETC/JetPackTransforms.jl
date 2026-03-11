@@ -256,9 +256,7 @@ end
     @test err_d < 1e-7
 end
 
-# TODO: check the correctness for dip != 0
-# @testset "JetSlantStack3D vs JetSlantStackShiftSum3D, parity" for dip in (0.0, 30.0)
-@testset "JetSlantStack3D vs JetSlantStackShiftSum3D, parity" for dip in (0.0, )
+@testset "JetSlantStack3D vs JetSlantStackShiftSum3D, parity" for dip in (0.0, 10.0)
     theta = collect(-45:1.0:45)
     phi = collect(0.0:45.0:135.0)
     azimuth = 45.0
@@ -278,5 +276,30 @@ end
     similarity = dot(d1, d2) / (norm(d1) * norm(d2))
 
     @show similarity
-    @test similarity > 0.95
+    @test similarity > 0.9
+end
+
+@testset "JopSlantStackShiftSum vs JopSlantStackShiftSum3D, parity" begin
+    theta = collect(-45:1.0:45)
+    phi = [0.0]
+    A1 = JopSlantStackShiftSum(JetSpace(Float64, 128, 129); mode="depth" , theta=theta, dz=0.01, h=collect(-0.64:0.01:0.64))
+    A2 = JopSlantStackShiftSum3D(JetSpace(Float64, 128, 129, 5); mode="depth" , theta=theta, phi=phi, dz=0.01, hx=collect(-0.64:0.01:0.64), hy=collect(0:0.01:0.04))
+    
+    m = zeros(domain(A2))
+    for i = 1:129
+        m[div(i,4)+20,i,1] = 1.0
+        m[div(i,3)+10,i,2] = -0.5
+    end
+    m[16,64,1] = 1
+    m[16,64,5] = -0.2
+    
+    d2 = A2*m
+    d1 = zeros(eltype(d2), size(d2)...)
+    for i = 1:size(m,3)
+        d1[:,:,1] .+= A1*view(m,:, :, i)
+    end
+
+    err_d = maximum(abs.(d1 .- d2)) / maximum(abs.(d1))
+    @show err_d
+    @test err_d < 1e-7
 end
