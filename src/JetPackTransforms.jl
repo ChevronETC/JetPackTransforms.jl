@@ -1,6 +1,6 @@
 module JetPackTransforms
 
-using FFTW, JetPack, Jets, LinearAlgebra, Wavelets, WaveFD, Base.Threads
+using FFTW, JetPack, Jets, LinearAlgebra, Wavelets, DSP, Base.Threads
 
 include("jop_dct.jl")
 include("jop_dwt.jl")

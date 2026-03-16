@@ -500,7 +500,7 @@ function JopSlantStackShiftSum_df!(d::AbstractArray{T,2}, m::AbstractArray{T,2};
         for ih = 1:nh
             shift = + h[ih] * p[ip] / dz
             if abs(shift) < nz
-                WaveFD.shiftforward!(WaveFD.shiftfilter(shift), holder, @view(mtap[:,ih]))
+                holder=_shift_forward(@view(mtap[:,ih]), shift)
                 d[:,ip] .+= holder
             end
         end
@@ -517,7 +517,7 @@ function JopSlantStackShiftSum_df′!(m::AbstractArray{T,2}, d::AbstractArray{T,
         for ip = 1:np
             shift = + h[ih] * p[ip] / dz
             if abs(shift) < nz
-                WaveFD.shiftadjoint!(WaveFD.shiftfilter(shift), holder, @view(d[:,ip]))
+                holder=_shift_adjoint(@view(d[:,ip]), shift)
                 @views mtap[:,ih] .+= holder
             end
         end
@@ -680,7 +680,7 @@ function JopSlantStackShiftSum3D_df_scalar!(d::AbstractArray{T,3}, m::AbstractAr
             for ih = 1:nh
                 shift = compute_shift(1, ih, ih, ipx, ipy, hx, hy, px, py, dz, num, denom)
                 if abs(shift) < nz
-                    WaveFD.shiftforward!(WaveFD.shiftfilter(shift), holder, @view(mtap[:,ih]))
+                    holder=_shift_forward(@view(mtap[:,ih]), shift)
                     d[:,ipx,ipy] .+= holder
                 end
             end
@@ -711,7 +711,7 @@ function JopSlantStackShiftSum3D_df_scalar!(d::AbstractArray{T,3}, m::AbstractAr
                 for ihy = 1:nhy
                     shift = compute_shift(1, ihx, ihy, ipx, ipy, hx, hy, px, py, dz, num, denom)
                     if abs(shift) < nz
-                        WaveFD.shiftforward!(WaveFD.shiftfilter(shift), holder, @view(mtap[:,ihx,ihy]))
+                        holder=_shift_forward(@view(mtap[:,ihx,ihy]), shift)
                         d[:,ipx,ipy] .+= holder
                     end
                 end
@@ -737,7 +737,7 @@ function JopSlantStackShiftSum3D_df_vector!(d::AbstractArray{T,3}, m::AbstractAr
                 for iz = 1:nz
                     shift = compute_shift(iz, ih, ih, ipx, ipy, hx, hy, px, py, dz, num, denom)
                     if abs(shift) < nz 
-                        WaveFD.shiftforward!(WaveFD.shiftfilter(shift), holder, @view(mtap[:,ih]))
+                        holder=_shift_forward(@view(mtap[:,ih]), shift)
                         d[iz,ipx,ipy] += holder[iz]
                     end
                 end
@@ -764,7 +764,7 @@ function JopSlantStackShiftSum3D_df_vector!(d::AbstractArray{T,3}, m::AbstractAr
                     for iz = 1:nz
                         shift = compute_shift(iz, ihx, ihy, ipx, ipy, hx, hy, px, py, dz, num, denom)
                         if abs(shift) < nz 
-                            WaveFD.shiftforward!(WaveFD.shiftfilter(shift), holder, @view(mtap[:,ihx,ihy]))
+                            holder=_shift_forward(@view(mtap[:,ihx,ihy]), shift)
                             d[iz,ipx,ipy] += holder[iz]
                         end
                     end
@@ -796,7 +796,7 @@ function JopSlantStackShiftSum3D_df_scalar′!(m::AbstractArray{T,2}, d::Abstrac
                 denom = sqrt(1 + (tan(dip)*sin(azimuth - py[ipy]))^2)
                 shift = compute_shift(1, ih, ih, ipx, ipy, hx, hy, px, py, dz, num, denom)
                 if abs(shift) < nz
-                    WaveFD.shiftadjoint!(WaveFD.shiftfilter(shift), holder, @view(d[:,ipx,ipy]))
+                    holder=_shift_adjoint(@view(d[:,ipx,ipy]), shift)
                     acc .+= holder
                 end
             end
@@ -829,7 +829,7 @@ function JopSlantStackShiftSum3D_df_scalar′!(m::AbstractArray{T,3}, d::Abstrac
                     denom = sqrt(1 + (tan(dip)*sin(azimuth - py[ipy]))^2)
                     shift = compute_shift(1, ihx, ihy, ipx, ipy, hx, hy, px, py, dz, num, denom)
                     if abs(shift) < nz
-                        WaveFD.shiftadjoint!(WaveFD.shiftfilter(shift), holder, @view(d[:,ipx,ipy]))
+                        holder=_shift_adjoint(@view(d[:,ipx,ipy]), shift)
                         acc .+= holder
                     end
                 end
@@ -859,7 +859,7 @@ function JopSlantStackShiftSum3D_df_vector′!(m::AbstractArray{T,2}, d::Abstrac
                     if abs(shift) < nz
                         fill!(holder, zero(T))
                         holder[iz] = d[iz,ipx,ipy]
-                        WaveFD.shiftadjoint!(WaveFD.shiftfilter(shift), acc, holder)
+                        acc=_shift_adjoint(holder, shift)
                         mtap[:,ih] .+= acc
                     end
                 end
@@ -889,7 +889,7 @@ function JopSlantStackShiftSum3D_df_vector′!(m::AbstractArray{T,3}, d::Abstrac
                         if abs(shift) < nz
                             fill!(holder, zero(T))
                             holder[iz] = d[iz,ipx,ipy]
-                            WaveFD.shiftadjoint!(WaveFD.shiftfilter(shift), acc, holder)
+                            acc=_shift_adjoint(holder, shift)
                             mtap[:,ihx,ihy] .+= acc
                         end
                     end
@@ -923,4 +923,34 @@ end
     # for depth domain accounting for geologic dip, the shift is given by (-hx*tan(θ)*(cos(ϕ)/denom + sin(ϕ)*num/denom) - hy*tan(θ)*(sin(ϕ)/denom - cos(ϕ)*num/denom)) / dz
     shift = + hx[ihx] * px[ipx] * (cos(py[ipy]) / denom[iz] + sin(py[ipy]) * num[iz] / denom[iz]) + hy[ihy] * px[ipx] * (sin(py[ipy]) / denom[iz] - cos(py[ipy]) * num[iz] / denom[iz])
     shift / dz
+end
+
+# helper functions to build a compact sinc kernel for forward and adjoint shifting in 1D
+function _sinc_kernel(δ, N)
+    n = -(N÷2):(N÷2)
+    h = sinc.(n .- δ)
+    h .* hann(length(h))
+end
+
+function _shift_forward(x, shift, N = 7)
+    ishift = round(Int, shift)
+    frac = shift - ishift
+    h = _sinc_kernel(frac, N)
+    L = length(h) ÷ 2
+    x_int = circshift(x, ishift)
+    x_frac = conv(x_int, h)
+    x_frac[L+1 : L+length(x)]
+end
+
+function _shift_adjoint(x, shift, N = 7)
+    ishift = round(Int, shift)
+    frac = shift - ishift
+    h = reverse(_sinc_kernel(frac, N))
+    n = length(x)
+    m = length(h)
+    L = m ÷ 2
+    x_pad = zeros(eltype(x), n+m-1)
+    x_pad[L+1 : L+n] .= x
+    x_frac = conv(x_pad, h)
+    circshift(@view(x_frac[m : m+n-1]), -ishift)
 end
