@@ -6,6 +6,6 @@ include("jop_dct.jl")
 include("jop_dwt.jl")
 include("jop_fft.jl")
 include("jop_sft.jl")
-include("jop_slantstack.jl") # requires JopTaper from JetPack and WaveFD.shiftforward! and WaveFD.shiftadjoint! from WaveFD.jl
+include("jop_slantstack.jl") # requires JopTaper from JetPack
 
 end

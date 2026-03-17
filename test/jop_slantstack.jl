@@ -118,6 +118,11 @@ end
 
     lhs, rhs = dot_product_test(A,rand(domain(A)),rand(range(A)))
     @test isapprox(lhs,rhs,rtol=1e-4)
+
+    A = JopSlantStack3D(JetSpace(T, 32, 3, 4, 8, 5); dz=10.0, dhx=10.0, dhy=5.0, hx0=-1000.0, hy0=-500.0, mode=mode, dip=dip, azimuth=azimuth, taperz=(0.3,0.3), taperhx=(0.3,0.3), taperhy=(0.3,0.3), taperkz=(0.3,0.3), taperkhx=(0.3,0.3), taperkhy=(0.3,0.3))
+
+    lhs, rhs = dot_product_test(A,rand(domain(A)),rand(range(A)))
+    @test isapprox(lhs,rhs,rtol=1e-4)
 end
 
 @testset "JetSlantStack3D, time-depth parity" begin
@@ -148,6 +153,32 @@ end
     @show err_d1, err_d2
     @test err_d1 < 1e-7
     @test err_d2 < 1e-7
+end
+
+@testset "JetSlantStack3D, 3D vs 5D parity" begin
+    theta = collect(-45:1.0:45)
+    phi = [0.0]
+    px = @. -tan(deg2rad(theta))
+    py = [0.0]
+
+    A1 = JopSlantStack3D(JetSpace(Float64, 64, 8, 8); mode="depth", theta=theta, phi = phi, px=px, py=py, dz=0.01, dhx=0.01, dhy=0.01, hx0=-0.64, hy0=-0.64)
+    A2 = JopSlantStack3D(JetSpace(Float64, 64, 1, 1, 8, 8); mode="depth", theta=theta, phi = phi, px=px, py=py, dz=0.01, dhx=0.01, dhy=0.01, hx0=-0.64, hy0=-0.64)
+    m = zeros(domain(A1))
+    for i = 1:8
+        m[div(i,4)+20,i,:] .= 1.0
+        m[div(i,2)+20,:,i] .= 0.5
+    end
+    m[16,4,4] = 1
+    m[32,5,7] = 1
+    
+    d1 = A1*m
+    m = reshape(m, size(domain(A2)))
+    d2 = A2*m
+    d2 = reshape(d2, size(d1))
+
+    err_d = maximum(abs.(d1 .- d2)) / maximum(abs.(d1))
+    @show err_d
+    @test err_d < 1e-7
 end
 
 @testset "JetSlantStackShiftSum3D, dot product test, T = $(T), mode = $(mode), dip = $(dip)" for T in (Float32, Float64), mode in ("depth", "time"), (dip, azimuth) in ((0.0,0.0), (30.0, 60.0), ([0.0], [0.0]))
