@@ -375,12 +375,10 @@ function JopSlantStack3D_df!(d::AbstractArray{T,5}, m::AbstractArray{T,5}; mode,
             ay_m1 = (khy[ikhy_p1] - _khy)/dhy
             ay_p1 = 1 - ay_m1
 
-            d_p1_p1 = M[ikz,:,:,ikhx_p1,ikhy_p1] .* exp(-im*(khx[ikhx_p1]*hx0 + khy[ikhy_p1]*hy0))
-            d_p1_m1 = M[ikz,:,:,ikhx_p1,ikhy_m1] .* exp(-im*(khx[ikhx_p1]*hx0 + khy[ikhy_m1]*hy0))
-            d_m1_p1 = M[ikz,:,:,ikhx_m1,ikhy_p1] .* exp(-im*(khx[ikhx_m1]*hx0 + khy[ikhy_p1]*hy0))
-            d_m1_m1 = M[ikz,:,:,ikhx_m1,ikhy_m1] .* exp(-im*(khx[ikhx_m1]*hx0 + khy[ikhy_m1]*hy0))
-
-            @views D[ikz,:,:,ipx,ipy] .= (ax_m1*ay_m1) .* d_m1_m1 .+ (ax_m1*ay_p1) .* d_m1_p1 .+ (ax_p1*ay_m1) .* d_p1_m1 .+ (ax_p1*ay_p1) .* d_p1_p1
+            @views D[ikz,:,:,ipx,ipy] .= (ax_m1*ay_m1*exp(-im*(khx[ikhx_m1]*hx0 + khy[ikhy_m1]*hy0))) .* M[ikz,:,:,ikhx_m1,ikhy_m1] .+ 
+                                         (ax_m1*ay_p1*exp(-im*(khx[ikhx_m1]*hx0 + khy[ikhy_p1]*hy0))) .* M[ikz,:,:,ikhx_m1,ikhy_p1] .+ 
+                                         (ax_p1*ay_m1*exp(-im*(khx[ikhx_p1]*hx0 + khy[ikhy_m1]*hy0))) .* M[ikz,:,:,ikhx_p1,ikhy_m1] .+ 
+                                         (ax_p1*ay_p1*exp(-im*(khx[ikhx_p1]*hx0 + khy[ikhy_p1]*hy0))) .* M[ikz,:,:,ikhx_p1,ikhy_p1]
         end
     end
 
@@ -483,15 +481,10 @@ function JopSlantStack3D_df′!(m::AbstractArray{T,5}, d::AbstractArray{T,5}; mo
             ay_m1 = (khy[ikhy_p1] - _khy)/dhy
             ay_p1 = 1 - ay_m1
 
-            m_p1_p1 = D[ikz,:,:,ipx,ipy].* exp(im*(khx[ikhx_p1]*hx0 + khy[ikhy_p1]*hy0))
-            m_p1_m1 = D[ikz,:,:,ipx,ipy].* exp(im*(khx[ikhx_p1]*hx0 + khy[ikhy_m1]*hy0))
-            m_m1_p1 = D[ikz,:,:,ipx,ipy].* exp(im*(khx[ikhx_m1]*hx0 + khy[ikhy_p1]*hy0))
-            m_m1_m1 = D[ikz,:,:,ipx,ipy].* exp(im*(khx[ikhx_m1]*hx0 + khy[ikhy_m1]*hy0))
-
-            M[ikz,:,:,ikhx_p1,ikhy_p1] .+= (ax_p1*ay_p1) .* m_p1_p1
-            M[ikz,:,:,ikhx_p1,ikhy_m1] .+= (ax_p1*ay_m1) .* m_p1_m1
-            M[ikz,:,:,ikhx_m1,ikhy_p1] .+= (ax_m1*ay_p1) .* m_m1_p1
-            M[ikz,:,:,ikhx_m1,ikhy_m1] .+= (ax_m1*ay_m1) .* m_m1_m1
+            @views M[ikz,:,:,ikhx_p1,ikhy_p1] .+= (ax_p1*ay_p1*exp(im*(khx[ikhx_p1]*hx0 + khy[ikhy_p1]*hy0))) .* D[ikz,:,:,ipx,ipy]
+            @views M[ikz,:,:,ikhx_p1,ikhy_m1] .+= (ax_p1*ay_m1*exp(im*(khx[ikhx_p1]*hx0 + khy[ikhy_m1]*hy0))) .* D[ikz,:,:,ipx,ipy]
+            @views M[ikz,:,:,ikhx_m1,ikhy_p1] .+= (ax_m1*ay_p1*exp(im*(khx[ikhx_m1]*hx0 + khy[ikhy_p1]*hy0))) .* D[ikz,:,:,ipx,ipy]
+            @views M[ikz,:,:,ikhx_m1,ikhy_m1] .+= (ax_m1*ay_m1*exp(im*(khx[ikhx_m1]*hx0 + khy[ikhy_m1]*hy0))) .* D[ikz,:,:,ipx,ipy]
         end
     end
 
