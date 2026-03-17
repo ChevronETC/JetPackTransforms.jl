@@ -1,4 +1,4 @@
-using JetPackTransforms, Jets, Test, LinearAlgebra
+using JetPackTransforms, Jets, Test, LinearAlgebra, Random
 
 # depth mode
 @testset "JetSlantStack, dot product test" for T in (Float32, Float64)
@@ -114,6 +114,7 @@ end
 end
 
 @testset "JetSlantStack3D, dot product test, T = $(T), mode = $(mode), dip = $(dip)" for T in (Float32, Float64), mode in ("depth", "time"), (dip, azimuth) in ((0.0,0.0), (30.0, 60.0))
+    Random.seed!(1234)
     A = JopSlantStack3D(JetSpace(T, 32, 8, 5); dz=10.0, dhx=10.0, dhy=5.0, hx0=-1000.0, hy0=-500.0, mode=mode, dip=dip, azimuth=azimuth, taperz=(0.3,0.3), taperhx=(0.3,0.3), taperhy=(0.3,0.3), taperkz=(0.3,0.3), taperkhx=(0.3,0.3), taperkhy=(0.3,0.3))
 
     lhs, rhs = dot_product_test(A,rand(domain(A)),rand(range(A)))
