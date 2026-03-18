@@ -182,6 +182,28 @@ end
     @test err_d < 1e-7
 end
 
+@testset "JetSlantStack3D, dip invariance" begin
+    theta = collect(-45:1.0:45)
+    phi = [0.0]
+    
+    A1 = JopSlantStack3D(JetSpace(Float64, 128, 129, 5); mode="depth", theta=theta, phi=phi, dz=0.01, hx0=-0.64, dhx=0.01, hy0=0, dhy=0.01, dip=0.0, azimuth=0.0)
+    A2 = JopSlantStack3D(JetSpace(Float64, 128, 129, 5); mode="depth", theta=theta, phi=phi, dz=0.01, hx0=-0.64, dhx=0.01, hy0=0, dhy=0.01, dip=30.0, azimuth=0.0)
+    m = zeros(domain(A1))
+    for i = 1:129
+        m[div(i,4)+20,i,1] = 1.0
+        m[div(i,3)+10,i,2] = -0.5
+    end
+    m[16,64,1] = 1
+    m[64,96,5] = -0.2
+    d1 = A1*m
+    d2 = A2*m
+
+    err_d = maximum(abs.(d1 .- d2)) / maximum(abs.(d1))
+
+    @show err_d
+    @test err_d < 1e-7
+end
+
 @testset "JetSlantStackShiftSum3D, dot product test, T = $(T), mode = $(mode), dip = $(dip)" for T in (Float32, Float64), mode in ("depth", "time"), (dip, azimuth) in ((0.0,0.0), (30.0, 60.0), ([0.0], [0.0]))
     if isa(dip, Array)
         dip = 90 .* rand(32)
@@ -257,6 +279,28 @@ end
     @test err_d < 1e-7
 end
 
+@testset "JetSlantStackShiftSum3D, dip invariance" begin
+    theta = collect(-45:1.0:45)
+    phi = [0.0]
+    
+    A1 = JopSlantStackShiftSum3D(JetSpace(Float64, 64, 129); mode="depth", theta=theta, phi = phi, dz=0.01, hx=collect(-0.64:0.01:0.64), hy=collect(-0.64:0.01:0.64), dip = 0.0, azimuth = 0.0)
+    A2 = JopSlantStackShiftSum3D(JetSpace(Float64, 64, 129); mode="depth", theta=theta, phi = phi, dz=0.01, hx=collect(-0.64:0.01:0.64), hy=collect(-0.64:0.01:0.64), dip = 30 .* rand(64), azimuth = zeros(64))
+
+    m = zeros(domain(A1))
+    for i = 1:129
+        m[div(i,4)+20,i] = 1.0
+    end
+    m[16,64] = 1
+    m[32,96] = 1
+    d1 = A1*m
+    d2 = A2*m
+
+    err_d = maximum(abs.(d1 .- d2)) / maximum(abs.(d1))
+
+    @show err_d
+    @test err_d < 1e-7
+end
+
 @testset "JetSlantStackShiftSum3D, offsets parity" begin
     theta = collect(-45:5.0:45)
     phi = collect(0.0:45.0:135.0)
@@ -308,7 +352,7 @@ end
     similarity = dot(d1, d2) / (norm(d1) * norm(d2))
 
     @show similarity
-    @test similarity > 0.9
+    @test similarity > 0.95
 end
 
 @testset "JopSlantStackShiftSum vs JopSlantStackShiftSum3D, parity" begin

@@ -509,8 +509,8 @@ end
 end
 
 @inline function slantstack_khxy_from_kz_geologic(ikz::Int64, ipx::Int64, ipy::Int64, px, py, kz, khx, khy, nhxfft, nhyfft, num, denom)
-    _khx = kz[ikz]*px[ipx]*(cos(py[ipy])/denom + sin(py[ipy]*num/denom))
-    _khy = kz[ikz]*px[ipx]*(sin(py[ipy])/denom - cos(py[ipy]*num/denom))
+    _khx = kz[ikz]*px[ipx]*(cos(py[ipy]) + sin(py[ipy])*num)/denom
+    _khy = kz[ikz]*px[ipx]*(sin(py[ipy]) - cos(py[ipy])*num)/denom
 
     ikhx_m1 = floor(Int64, _khx/khx[2]) + 1
     ikhx_p1 = ceil(Int64, _khx/khx[2]) + 1
