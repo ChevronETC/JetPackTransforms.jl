@@ -171,9 +171,10 @@ end
     A = JopSlantStack3D(dom[; dz=1.0, dhx=1.0, dhy=1.0, hx0=0.0, hy0=0.0, ...])
 
 where `A` is the 3D slant-stack operator mapping for `z-hx-hy` to `z-θ-ϕ` (depth mode) or `t-hx-hy` to `tau-px-py` (time mode).
-The domain of the operator is `nz` x `nhx` x `nhy` with precision T, `dz` is the depth spacing (or time interval),
-`dhx` and `dhy` are the offset spacings, and `hx0` and `hy0` are the origins of the offset axes. The additional named optional arguments
-along with their default values are,
+The domain of the operator is typically `nz` x `nhx` x `nhy` with precision T, `dz` is the depth spacing (or time interval),
+`dhx` and `dhy` are the offset spacings, and `hx0` and `hy0` are the origins of the offset axes.
+The domain can also be `nz` x `ny` x `nx` x `nhx` x `nhy` where the `y` and `x` dimensions are passive.
+The additional named optional arguments along with their default values are,
 
 * `mode="depth` - choose between "depth" and "time" to specify if the input domain is `z-hx-hy` or `t-hx-hy`.
 * `theta=-45:1.0:45` - range of incidence angles used when `mode="depth"`.
@@ -227,7 +228,16 @@ function JopSlantStack3D(
     dhy < 0.0 && error("expected dhy>0.0, got dhy=$(dhy)")
     mode == "depth" && any(abs.(theta) .>= 90.0) && error("for mode='depth', all theta values must be < 90 degrees in absolute value")
 
-    nz,nhx,nhy = size(dom)
+    ndim = length(size(dom))
+    if ndim == 3
+        nz,nhx,nhy = size(dom)
+        active_dims = (1,2,3)
+    elseif ndim == 5
+        nz,ny,nx,nhx,nhy = size(dom)
+        active_dims = (1,4,5)
+    else
+        error("unsupported domain size: $(size(dom))")
+    end
 
     # kz
     nzfft = nextprod([2,3,5,7], round(Int, nz*(1 + padz)))
@@ -266,10 +276,10 @@ function JopSlantStack3D(
     azimuth = T(azimuth)
 
     # tapers
-    TX = JopTaper(dom, (1,2,3), (taperz[1],taperhx[1],taperhy[1]), (taperz[2],taperhx[2],taperhy[2]))
-    TK = JopTaper(JetSpace(Complex{eltype(dom)},div(nzfft,2)+1, nhxfft, nhyfft), (1,2,3), (taperkz[1], taperkhx[1], taperkhy[1]), (taperkz[2], taperkhx[2], taperkhy[2]), mode=(:normal,:fftshift,:fftshift))
+    TX = JopTaper(dom, active_dims, (taperz[1],taperhx[1],taperhy[1]), (taperz[2],taperhx[2],taperhy[2]))
+    TK = JopTaper(ndim == 3 ? JetSpace(Complex{eltype(dom)}, div(nzfft,2)+1, nhxfft, nhyfft) : JetSpace(Complex{eltype(dom)}, div(nzfft,2)+1, ny, nx, nhxfft, nhyfft), active_dims, (taperkz[1], taperkhx[1], taperkhy[1]), (taperkz[2], taperkhx[2], taperkhy[2]), mode=(:normal,:fftshift,:fftshift))
 
-    JopLn(dom = dom, rng = JetSpace(T, nz, length(px), length(py)), df! = JopSlantStack3D_df!, df′! = JopSlantStack3D_df′!,
+    JopLn(dom = dom, rng = ndim == 3 ? JetSpace(T, nz, length(px), length(py)) : JetSpace(T, nz, ny, nx, length(px), length(py)), df! = JopSlantStack3D_df!, df′! = JopSlantStack3D_df′!,
         s = (;mode, nzfft, nhxfft, nhyfft, kz, khx, khy, px, py, hx0, hy0, dip, azimuth, TX, TK))
 end
 export JopSlantStack3D
@@ -293,37 +303,87 @@ function JopSlantStack3D_df!(d::AbstractArray{T,3}, m::AbstractArray{T,3}; mode,
     is_out_of_bounds = (ikhx_m1, ikhx_p1, ikhy_m1, ikhy_p1)->(ikhx_m1 < 1 || ikhx_p1 > nhxfft || ikhy_m1 < 1 || ikhy_p1 > nhyfft)
 
     D = zeros(eltype(M), size(M,1), npx, npy)
-    @threads for ipx = 1:npx
-        for ipy = 1:npy
-            num = tan(dip)^2 *sin(azimuth - py[ipy])*cos(azimuth - py[ipy])
-            denom = sqrt(1 + (tan(dip)*sin(azimuth - py[ipy]))^2)
-            for ikz = 1:div(nzfft,2)+1
-                ikhx_m1, ikhx_p1, _khx, ikhy_m1, ikhy_p1, _khy = compute_kh(ikz, ipx, ipy, px, py, kz, khx, khy, nhxfft, nhyfft, num, denom)
+    @threads for ip = 1:npx*npy
+        ipx = div(ip-1, npy) + 1
+        ipy = mod(ip-1, npy) + 1
+        num = tan(dip)^2 *sin(azimuth - py[ipy])*cos(azimuth - py[ipy])
+        denom = sqrt(1 + (tan(dip)*sin(azimuth - py[ipy]))^2)
+        for ikz = 1:div(nzfft,2)+1
+            ikhx_m1, ikhx_p1, _khx, ikhy_m1, ikhy_p1, _khy = compute_kh(ikz, ipx, ipy, px, py, kz, khx, khy, nhxfft, nhyfft, num, denom)
 
-                is_out_of_bounds(ikhx_m1, ikhx_p1, ikhy_m1, ikhy_p1) && continue
+            is_out_of_bounds(ikhx_m1, ikhx_p1, ikhy_m1, ikhy_p1) && continue
 
-                if (ikhx_m1 == ikhx_p1) && (ikhy_m1 == ikhy_p1)
-                    D[ikz,ipx,ipy] = M[ikz,ikhx_m1,ikhy_m1]*exp(-im*(khx[ikhx_m1]*hx0 + khy[ikhy_m1]*hy0))
-                    continue
-                end
-
-                ax_m1 = (khx[ikhx_p1] - _khx)/dhx
-                ax_p1 = 1 - ax_m1
-                ay_m1 = (khy[ikhy_p1] - _khy)/dhy
-                ay_p1 = 1 - ay_m1
-
-                d_p1_p1 = M[ikz,ikhx_p1,ikhy_p1]*exp(-im*(khx[ikhx_p1]*hx0 + khy[ikhy_p1]*hy0))
-                d_p1_m1 = M[ikz,ikhx_p1,ikhy_m1]*exp(-im*(khx[ikhx_p1]*hx0 + khy[ikhy_m1]*hy0))
-                d_m1_p1 = M[ikz,ikhx_m1,ikhy_p1]*exp(-im*(khx[ikhx_m1]*hx0 + khy[ikhy_p1]*hy0))
-                d_m1_m1 = M[ikz,ikhx_m1,ikhy_m1]*exp(-im*(khx[ikhx_m1]*hx0 + khy[ikhy_m1]*hy0))
-
-                D[ikz,ipx,ipy] = ax_m1*ay_m1*d_m1_m1 + ax_m1*ay_p1*d_m1_p1 + ax_p1*ay_m1*d_p1_m1 + ax_p1*ay_p1*d_p1_p1
+            if (ikhx_m1 == ikhx_p1) && (ikhy_m1 == ikhy_p1)
+                D[ikz,ipx,ipy] = M[ikz,ikhx_m1,ikhy_m1]*exp(-im*(khx[ikhx_m1]*hx0 + khy[ikhy_m1]*hy0))
+                continue
             end
+
+            ax_m1 = (khx[ikhx_p1] - _khx)/dhx
+            ax_p1 = 1 - ax_m1
+            ay_m1 = (khy[ikhy_p1] - _khy)/dhy
+            ay_p1 = 1 - ay_m1
+
+            d_p1_p1 = M[ikz,ikhx_p1,ikhy_p1]*exp(-im*(khx[ikhx_p1]*hx0 + khy[ikhy_p1]*hy0))
+            d_p1_m1 = M[ikz,ikhx_p1,ikhy_m1]*exp(-im*(khx[ikhx_p1]*hx0 + khy[ikhy_m1]*hy0))
+            d_m1_p1 = M[ikz,ikhx_m1,ikhy_p1]*exp(-im*(khx[ikhx_m1]*hx0 + khy[ikhy_p1]*hy0))
+            d_m1_m1 = M[ikz,ikhx_m1,ikhy_m1]*exp(-im*(khx[ikhx_m1]*hx0 + khy[ikhy_m1]*hy0))
+
+            D[ikz,ipx,ipy] = ax_m1*ay_m1*d_m1_m1 + ax_m1*ay_p1*d_m1_p1 + ax_p1*ay_m1*d_p1_m1 + ax_p1*ay_p1*d_p1_p1
         end
     end
 
     _d = brfft(D, nzfft, 1)
     d .= _d[1:nz,1:npx,1:npy] ./ nzfft
+end
+
+function JopSlantStack3D_df!(d::AbstractArray{T,5}, m::AbstractArray{T,5}; mode, nzfft, nhxfft, nhyfft, kz, khx, khy, px, py, hx0, hy0, dip, azimuth, TX, TK, kwargs...) where {T}
+    ny, nx, nhx, nhy, npx, npy, dhx, dhy = size(m,2), size(m,3), size(m,4), size(m,5), length(px), length(py), abs(khx[2]-khx[1]), abs(khy[2]-khy[1])
+    nz = size(d, 1)
+
+    mpad = zeros(T, nzfft, ny, nx, nhxfft, nhyfft)
+    mpad[1:nz,1:ny,1:nx,1:nhx,1:nhy] = TX*m
+    M = TK*rfft(mpad, (1, 4, 5))
+
+    if mode == "time"
+        compute_kh = slantstack_khxy_from_frequency
+    elseif dip == 0
+        compute_kh = slantstack_khxy_from_kz
+    else
+        compute_kh = slantstack_khxy_from_kz_geologic
+    end
+
+    is_out_of_bounds = (ikhx_m1, ikhx_p1, ikhy_m1, ikhy_p1)->(ikhx_m1 < 1 || ikhx_p1 > nhxfft || ikhy_m1 < 1 || ikhy_p1 > nhyfft)
+
+    D = zeros(eltype(M), size(M,1), ny, nx, npx, npy)
+    @threads for ip = 1:npx*npy
+        ipx = div(ip-1, npy) + 1
+        ipy = mod(ip-1, npy) + 1
+        num = tan(dip)^2 *sin(azimuth - py[ipy])*cos(azimuth - py[ipy])
+        denom = sqrt(1 + (tan(dip)*sin(azimuth - py[ipy]))^2)
+        for ikz = 1:div(nzfft,2)+1
+            ikhx_m1, ikhx_p1, _khx, ikhy_m1, ikhy_p1, _khy = compute_kh(ikz, ipx, ipy, px, py, kz, khx, khy, nhxfft, nhyfft, num, denom)
+
+            is_out_of_bounds(ikhx_m1, ikhx_p1, ikhy_m1, ikhy_p1) && continue
+
+            if (ikhx_m1 == ikhx_p1) && (ikhy_m1 == ikhy_p1)
+                @views D[ikz,:,:,ipx,ipy] .= M[ikz,:,:,ikhx_m1,ikhy_m1] .* exp(-im*(khx[ikhx_m1]*hx0 + khy[ikhy_m1]*hy0))
+                continue
+            end
+
+            ax_m1 = (khx[ikhx_p1] - _khx)/dhx
+            ax_p1 = 1 - ax_m1
+            ay_m1 = (khy[ikhy_p1] - _khy)/dhy
+            ay_p1 = 1 - ay_m1
+
+            @views D[ikz,:,:,ipx,ipy] .= (ax_m1*ay_m1*exp(-im*(khx[ikhx_m1]*hx0 + khy[ikhy_m1]*hy0))) .* M[ikz,:,:,ikhx_m1,ikhy_m1] .+ 
+                                         (ax_m1*ay_p1*exp(-im*(khx[ikhx_m1]*hx0 + khy[ikhy_p1]*hy0))) .* M[ikz,:,:,ikhx_m1,ikhy_p1] .+ 
+                                         (ax_p1*ay_m1*exp(-im*(khx[ikhx_p1]*hx0 + khy[ikhy_m1]*hy0))) .* M[ikz,:,:,ikhx_p1,ikhy_m1] .+ 
+                                         (ax_p1*ay_p1*exp(-im*(khx[ikhx_p1]*hx0 + khy[ikhy_p1]*hy0))) .* M[ikz,:,:,ikhx_p1,ikhy_p1]
+        end
+    end
+
+    _d = brfft(D, nzfft, 1)
+    d .= _d[1:nz,:,:,1:npx,1:npy] ./ nzfft
 end
 
 function JopSlantStack3D_df′!(m::AbstractArray{T,3}, d::AbstractArray{T,3}; mode, nzfft, nhxfft, nhyfft, kz, khx, khy, px, py, hx0, hy0, dip, azimuth, TX, TK, kwargs...) where {T}
@@ -346,39 +406,89 @@ function JopSlantStack3D_df′!(m::AbstractArray{T,3}, d::AbstractArray{T,3}; mo
     is_out_of_bounds = (ikhx_m1, ikhx_p1, ikhy_m1, ikhy_p1)->(ikhx_m1 < 1 || ikhx_p1 > nhxfft || ikhy_m1 < 1 || ikhy_p1 > nhyfft)
 
     M = zeros(Complex{T}, div(nzfft,2)+1, nhxfft, nhyfft)
-    for ipx = 1:npx
-        for ipy = 1:npy
-            num = tan(dip)^2 *sin(azimuth - py[ipy])*cos(azimuth - py[ipy])
-            denom = sqrt(1 + (tan(dip)*sin(azimuth - py[ipy]))^2)
-            for ikz = 1:div(nzfft,2)+1
-                ikhx_m1, ikhx_p1, _khx, ikhy_m1, ikhy_p1, _khy = compute_kh(ikz, ipx, ipy, px, py, kz, khx, khy, nhxfft, nhyfft, num, denom)
+    for ip = 1:npx*npy
+        ipx = div(ip-1, npy) + 1
+        ipy = mod(ip-1, npy) + 1
+        num = tan(dip)^2 *sin(azimuth - py[ipy])*cos(azimuth - py[ipy])
+        denom = sqrt(1 + (tan(dip)*sin(azimuth - py[ipy]))^2)
+        for ikz = 1:div(nzfft,2)+1
+            ikhx_m1, ikhx_p1, _khx, ikhy_m1, ikhy_p1, _khy = compute_kh(ikz, ipx, ipy, px, py, kz, khx, khy, nhxfft, nhyfft, num, denom)
 
-                is_out_of_bounds(ikhx_m1, ikhx_p1, ikhy_m1, ikhy_p1) && continue
+            is_out_of_bounds(ikhx_m1, ikhx_p1, ikhy_m1, ikhy_p1) && continue
 
-                if (ikhx_m1 == ikhx_p1) && (ikhy_m1 == ikhy_p1)
-                    M[ikz,ikhx_p1,ikhy_p1] += D[ikz,ipx,ipy]*exp(im*(khx[ikhx_p1]*hx0 + khy[ikhy_p1]*hy0))
-                    continue
-                end
-
-                ax_m1 = (khx[ikhx_p1] - _khx)/dhx
-                ax_p1 = 1 - ax_m1
-                ay_m1 = (khy[ikhy_p1] - _khy)/dhy
-                ay_p1 = 1 - ay_m1
-
-                m_p1_p1 = D[ikz,ipx,ipy]*exp(im*(khx[ikhx_p1]*hx0 + khy[ikhy_p1]*hy0))
-                m_p1_m1 = D[ikz,ipx,ipy]*exp(im*(khx[ikhx_p1]*hx0 + khy[ikhy_m1]*hy0))
-                m_m1_p1 = D[ikz,ipx,ipy]*exp(im*(khx[ikhx_m1]*hx0 + khy[ikhy_p1]*hy0))
-                m_m1_m1 = D[ikz,ipx,ipy]*exp(im*(khx[ikhx_m1]*hx0 + khy[ikhy_m1]*hy0))
-
-                M[ikz,ikhx_p1,ikhy_p1] += ax_p1*ay_p1*m_p1_p1
-                M[ikz,ikhx_p1,ikhy_m1] += ax_p1*ay_m1*m_p1_m1
-                M[ikz,ikhx_m1,ikhy_p1] += ax_m1*ay_p1*m_m1_p1
-                M[ikz,ikhx_m1,ikhy_m1] += ax_m1*ay_m1*m_m1_m1
+            if (ikhx_m1 == ikhx_p1) && (ikhy_m1 == ikhy_p1)
+                M[ikz,ikhx_p1,ikhy_p1] += D[ikz,ipx,ipy]*exp(im*(khx[ikhx_p1]*hx0 + khy[ikhy_p1]*hy0))
+                continue
             end
+
+            ax_m1 = (khx[ikhx_p1] - _khx)/dhx
+            ax_p1 = 1 - ax_m1
+            ay_m1 = (khy[ikhy_p1] - _khy)/dhy
+            ay_p1 = 1 - ay_m1
+
+            m_p1_p1 = D[ikz,ipx,ipy]*exp(im*(khx[ikhx_p1]*hx0 + khy[ikhy_p1]*hy0))
+            m_p1_m1 = D[ikz,ipx,ipy]*exp(im*(khx[ikhx_p1]*hx0 + khy[ikhy_m1]*hy0))
+            m_m1_p1 = D[ikz,ipx,ipy]*exp(im*(khx[ikhx_m1]*hx0 + khy[ikhy_p1]*hy0))
+            m_m1_m1 = D[ikz,ipx,ipy]*exp(im*(khx[ikhx_m1]*hx0 + khy[ikhy_m1]*hy0))
+
+            M[ikz,ikhx_p1,ikhy_p1] += ax_p1*ay_p1*m_p1_p1
+            M[ikz,ikhx_p1,ikhy_m1] += ax_p1*ay_m1*m_p1_m1
+            M[ikz,ikhx_m1,ikhy_p1] += ax_m1*ay_p1*m_m1_p1
+            M[ikz,ikhx_m1,ikhy_m1] += ax_m1*ay_m1*m_m1_m1
         end
     end
 
     m .= TX * (brfft(TK * M, nzfft)[1:nz,1:nhx,1:nhy])
+end
+
+function JopSlantStack3D_df′!(m::AbstractArray{T,5}, d::AbstractArray{T,5}; mode, nzfft, nhxfft, nhyfft, kz, khx, khy, px, py, hx0, hy0, dip, azimuth, TX, TK, kwargs...) where {T}
+    ny, nx, nhx, nhy, npx, npy, dhx, dhy = size(m,2), size(m,3), size(m,4), size(m,5), length(px), length(py), abs(khx[2]-khx[1]), abs(khy[2]-khy[1])
+    nz = size(d, 1)
+
+    dpad = zeros(T, nzfft, ny, nx, npx, npy)
+    dpad[1:nz,:,:,:,:] = d
+
+    D = (rfft(dpad, 1) ./ nzfft)
+
+    if mode == "time"
+        compute_kh = slantstack_khxy_from_frequency
+    elseif dip == 0
+        compute_kh = slantstack_khxy_from_kz
+    else
+        compute_kh = slantstack_khxy_from_kz_geologic
+    end
+
+    is_out_of_bounds = (ikhx_m1, ikhx_p1, ikhy_m1, ikhy_p1)->(ikhx_m1 < 1 || ikhx_p1 > nhxfft || ikhy_m1 < 1 || ikhy_p1 > nhyfft)
+
+    M = zeros(Complex{T}, div(nzfft,2)+1, ny, nx, nhxfft, nhyfft)
+    for ip = 1:npx*npy
+        ipx = div(ip-1, npy) + 1
+        ipy = mod(ip-1, npy) + 1
+        num = tan(dip)^2 *sin(azimuth - py[ipy])*cos(azimuth - py[ipy])
+        denom = sqrt(1 + (tan(dip)*sin(azimuth - py[ipy]))^2)
+        for ikz = 1:div(nzfft,2)+1
+            ikhx_m1, ikhx_p1, _khx, ikhy_m1, ikhy_p1, _khy = compute_kh(ikz, ipx, ipy, px, py, kz, khx, khy, nhxfft, nhyfft, num, denom)
+
+            is_out_of_bounds(ikhx_m1, ikhx_p1, ikhy_m1, ikhy_p1) && continue
+
+            if (ikhx_m1 == ikhx_p1) && (ikhy_m1 == ikhy_p1)
+                @views M[ikz,:,:,ikhx_p1,ikhy_p1] .+= D[ikz,:,:,ipx,ipy] .* exp(im*(khx[ikhx_p1]*hx0 + khy[ikhy_p1]*hy0))
+                continue
+            end
+
+            ax_m1 = (khx[ikhx_p1] - _khx)/dhx
+            ax_p1 = 1 - ax_m1
+            ay_m1 = (khy[ikhy_p1] - _khy)/dhy
+            ay_p1 = 1 - ay_m1
+
+            @views M[ikz,:,:,ikhx_p1,ikhy_p1] .+= (ax_p1*ay_p1*exp(im*(khx[ikhx_p1]*hx0 + khy[ikhy_p1]*hy0))) .* D[ikz,:,:,ipx,ipy]
+            @views M[ikz,:,:,ikhx_p1,ikhy_m1] .+= (ax_p1*ay_m1*exp(im*(khx[ikhx_p1]*hx0 + khy[ikhy_m1]*hy0))) .* D[ikz,:,:,ipx,ipy]
+            @views M[ikz,:,:,ikhx_m1,ikhy_p1] .+= (ax_m1*ay_p1*exp(im*(khx[ikhx_m1]*hx0 + khy[ikhy_p1]*hy0))) .* D[ikz,:,:,ipx,ipy]
+            @views M[ikz,:,:,ikhx_m1,ikhy_m1] .+= (ax_m1*ay_m1*exp(im*(khx[ikhx_m1]*hx0 + khy[ikhy_m1]*hy0))) .* D[ikz,:,:,ipx,ipy]
+        end
+    end
+
+    m .= TX * (brfft(TK * M, nzfft, (1,4,5))[1:nz,:,:,1:nhx,1:nhy])
 end
 
 @inline function slantstack_khxy_from_kz(ikz::Int64, ipx::Int64, ipy::Int64, px, py, kz, khx, khy, nhxfft, nhyfft, num, denom)
@@ -399,8 +509,8 @@ end
 end
 
 @inline function slantstack_khxy_from_kz_geologic(ikz::Int64, ipx::Int64, ipy::Int64, px, py, kz, khx, khy, nhxfft, nhyfft, num, denom)
-    _khx = kz[ikz]*px[ipx]*(cos(py[ipy])/denom + sin(py[ipy]*num/denom))
-    _khy = kz[ikz]*px[ipx]*(sin(py[ipy])/denom - cos(py[ipy]*num/denom))
+    _khx = kz[ikz]*px[ipx]*(cos(py[ipy]) + sin(py[ipy])*num)/denom
+    _khy = kz[ikz]*px[ipx]*(sin(py[ipy]) - cos(py[ipy])*num)/denom
 
     ikhx_m1 = floor(Int64, _khx/khx[2]) + 1
     ikhx_p1 = ceil(Int64, _khx/khx[2]) + 1
