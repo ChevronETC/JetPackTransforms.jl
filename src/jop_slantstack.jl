@@ -3,7 +3,7 @@
 
 where `A` is the 2D slant-stack operator mapping for `z-h` to `z-θ` (depth mode) or `t-h` to `tau-p` (time mode).
 The domain of the operator is `nz` x `nh` with precision T, `dz` is the depth spacing (or time interval),
-`dh` is the offset spacing, and `h0` is the origin of the offset axis.  The additional named optional arguments
+`dh` is the (half) offset spacing, and `h0` is the origin of the (half) offset axis.  The additional named optional arguments
 along with their default values are,
 
 * `mode="depth` - choose between "depth" and "time" to specify if the input domain is `z-h` or `t-h`
@@ -146,6 +146,9 @@ end
 @inline function slantstack_compute_kh_from_kz(ikz::Int64, ip::Int64, tant, p, kz, kh, nhfft)
     _kh = -kz[ikz]*tant[ip]
 
+    # check if wavenumber is outside Nyquist
+    ((_kh > kh[div(nhfft+1,2)]) || (_kh < kh[div(nhfft+1,2)+1])) && return -1, -1, _kh
+
     ikh_m1 = floor(Int64, _kh/kh[2]) + 1
     ikh_p1 = ceil(Int64, _kh/kh[2]) + 1
 
@@ -157,6 +160,9 @@ end
 
 @inline function slantstack_compute_kh_from_frequency(iω::Int64, ip::Int64, tant, p, ω, kh, nhfft)
     _kh = p[ip]*ω[iω]
+
+    # check if wavenumber is outside Nyquist
+    ((_kh > kh[div(nhfft+1,2)]) || (_kh < kh[div(nhfft+1,2)+1])) && return -1, -1, _kh
 
     ikh_m1 = floor(Int64, _kh/kh[2]) + 1
     ikh_p1 = ceil(Int64, _kh/kh[2]) + 1
@@ -172,7 +178,7 @@ end
 
 where `A` is the 3D slant-stack operator mapping for `z-hx-hy` to `z-θ-ϕ` (depth mode) or `t-hx-hy` to `tau-px-py` (time mode).
 The domain of the operator is typically `nz` x `nhx` x `nhy` with precision T, `dz` is the depth spacing (or time interval),
-`dhx` and `dhy` are the offset spacings, and `hx0` and `hy0` are the origins of the offset axes.
+`dhx` and `dhy` are the (half) offset spacings, and `hx0` and `hy0` are the origins of the (half) offset axes.
 The domain can also be `nz` x `ny` x `nx` x `nhx` x `nhy` where the `y` and `x` dimensions are passive.
 The additional named optional arguments along with their default values are,
 
@@ -491,6 +497,9 @@ end
     _khx = kz[ikz]*px[ipx]*cos(py[ipy])
     _khy = kz[ikz]*px[ipx]*sin(py[ipy])
 
+    # check if wavenumber is outside Nyquist
+    ((_khx > khx[div(nhxfft+1,2)]) || (_khx < khx[div(nhxfft+1,2)+1]) || (_khy > khy[div(nhyfft+1,2)]) || (_khy < khy[div(nhyfft+1,2)+1])) && return -1, -1, _khx, -1, -1, _khy
+
     ikhx_m1 = floor(Int64, _khx/khx[2]) + 1
     ikhx_p1 = ceil(Int64, _khx/khx[2]) + 1
     ikhy_m1 = floor(Int64, _khy/khy[2]) + 1
@@ -508,6 +517,9 @@ end
     _khx = kz[ikz]*px[ipx]*cos(py[ipy])*factor
     _khy = kz[ikz]*px[ipx]*sin(py[ipy])*factor
 
+    # check if wavenumber is outside Nyquist
+    ((_khx > khx[div(nhxfft+1,2)]) || (_khx < khx[div(nhxfft+1,2)+1]) || (_khy > khy[div(nhyfft+1,2)]) || (_khy < khy[div(nhyfft+1,2)+1])) && return -1, -1, _khx, -1, -1, _khy
+
     ikhx_m1 = floor(Int64, _khx/khx[2]) + 1
     ikhx_p1 = ceil(Int64, _khx/khx[2]) + 1
     ikhy_m1 = floor(Int64, _khy/khy[2]) + 1
@@ -524,6 +536,9 @@ end
 @inline function slantstack_khxy_from_frequency(iω::Int64, ipx::Int64, ipy::Int64, px, py, ω, khx, khy, nhxfft, nhyfft, factor)
     _khx = px[ipx]*ω[iω]
     _khy = py[ipy]*ω[iω]
+
+    # check if wavenumber is outside Nyquist
+    ((_khx > khx[div(nhxfft+1,2)]) || (_khx < khx[div(nhxfft+1,2)+1]) || (_khy > khy[div(nhyfft+1,2)]) || (_khy < khy[div(nhyfft+1,2)+1])) && return -1, -1, _khx, -1, -1, _khy
 
     ikhx_m1 = floor(Int64, _khx/khx[2]) + 1
     ikhx_p1 = ceil(Int64, _khx/khx[2]) + 1
@@ -544,7 +559,7 @@ end
 where `A` is the 2D slant-stack operator mapping for `z-h` to `z-θ` (depth mode) or `t-h` to `tau-p` (time mode).
 The slant stacking is performed directly on the input domain by shifting and summing along the offset axis.
 The domain of the operator is `nz` x `nh` with precision T, `dz` is the depth spacing (or time interval),
-`h`, if provided, is the array of offsets (can be irregular). If not provided, a regular grid is assumed with same sampling as dz.
+`h`, if provided, is the array of (half) offsets (can be irregular). If not provided, a regular grid is assumed with same sampling as dz.
 The additional named optional arguments along with their default values are,
 
 * `mode="depth` - choose between "depth" and "time" to specify if the input domain is `z-h` or `t-h`
@@ -602,7 +617,6 @@ function JopSlantStackShiftSum_df!(d::AbstractArray{T,2}, m::AbstractArray{T,2};
     d .= 0
     mtap = TZ * m
     @threads for ip = 1:np
-        holder = zeros(T, nz)
         for ih = 1:nh
             shift = + h[ih] * p[ip] / dz
             if abs(shift) < nz
@@ -619,7 +633,6 @@ function JopSlantStackShiftSum_df′!(m::AbstractArray{T,2}, d::AbstractArray{T,
 
     mtap = zeros(T, nz, nh)
     @threads for ih = 1:nh
-        holder = zeros(T, nz)
         for ip = 1:np
             shift = + h[ih] * p[ip] / dz
             if abs(shift) < nz
@@ -641,7 +654,7 @@ end
 where `A` is the 3D slant-stack operator mapping for `z-hx-hy` to `z-θ-ϕ` (depth mode) or `t-hx-hy` to `tau-px-py` (time mode).
 The slant stacking is performed directly on the input domain by shifting and summing along the offset axis.
 The domain of the operator is `nz` x `nh` (for irregular) or `nz` x `nhx` x `nhy` (for regular) with precision T, `dz` is the depth spacing (or time interval),
-`hx` and `hy`, if provided, are the arrays of offsets (can be irregular). If not provided, a regular grid is assumed with same sampling as dz.
+`hx` and `hy`, if provided, are the arrays of (half) offsets (can be irregular). If not provided, a regular grid is assumed with same sampling as dz.
 The additional named optional arguments along with their default values are,
 
 * `mode="depth` - choose between "depth" and "time" to specify if the input domain is `z-hx-hy` or `t-hx-hy`

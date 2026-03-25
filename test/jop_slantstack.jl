@@ -1,7 +1,7 @@
 using JetPackTransforms, Jets, Test, LinearAlgebra, Random
 
 # depth mode
-@test_skip @testset "JetSlantStack, dot product test" for T in (Float32, Float64)
+@testset "JetSlantStack, dot product test" for T in (Float32, Float64)
     A = JopSlantStack(JetSpace(T, 64, 128); dz=10.0, dh=10.0, h0=-1000.0)
 
     lhs, rhs = dot_product_test(A,rand(domain(A)),rand(range(A)))
@@ -12,7 +12,7 @@ using JetPackTransforms, Jets, Test, LinearAlgebra, Random
     @test isapprox(lhs,rhs,rtol=1e-4)
 end
 
-@test_skip @testset "JetSlantStack, correctness" for padz in (0.0, 0.2)
+@testset "JetSlantStack, correctness" for padz in (0.0, 0.2)
     A = JopSlantStack(JetSpace(Float64, 64, 128); dz=10.0, dh=10.0, h0=-1000.0, padz)
     m = zeros(domain(A))
     m[32,:] .= 1
@@ -23,7 +23,7 @@ end
 end
 
 # time mode
-@test_skip @testset "JetSlantStack, dot product test" for T in (Float32, Float64)
+@testset "JetSlantStack, dot product test" for T in (Float32, Float64)
     A = JopSlantStack(JetSpace(T, 64, 128); dz=0.004, dh=10.0, h0=-1000.0, mode="time")
 
     lhs, rhs = dot_product_test(A,rand(domain(A)),rand(range(A)))
@@ -34,7 +34,7 @@ end
     @test isapprox(lhs,rhs,rtol=1e-4)
 end
 
-@test_skip @testset "JetSlantStack, correctness" for padz in (0.0, 0.2)
+@testset "JetSlantStack, correctness" for padz in (0.0, 0.2)
     A = JopSlantStack(JetSpace(Float64, 64, 128); dz=0.004, dh=10.0, h0=-1000.0, padz, mode="time")
     m = zeros(domain(A))
     m[32,:] .= 1
@@ -44,7 +44,7 @@ end
 end
 
 # depth-time parity test
-@test_skip @testset "JetSlantStack, parity" begin
+@testset "JetSlantStack, parity" begin
     theta = collect(-45:1.0:45)
     # the ray parameters that would give the same results as theta is
     p = @. -tan(deg2rad(theta))
@@ -65,13 +65,13 @@ end
     @test err_d < 1e-7
 end
 
-@test_skip @testset "JetSlantStackShiftSum, dot product test" for T in (Float32, Float64), mode in ("depth", "time")
+@testset "JetSlantStackShiftSum, dot product test" for T in (Float32, Float64), mode in ("depth", "time")
     A = JopSlantStackShiftSum(JetSpace(T, 64, 128); dz=10.0, mode=mode, h = 10.0 .* rand(128) .- 5, taperz=(0.3,0.3))
     lhs, rhs = dot_product_test(A,rand(domain(A)),rand(range(A)))
     @test isapprox(lhs,rhs,rtol=1e-4)
 end
 
-@test_skip @testset "JetSlantStackShiftSum, parity" begin
+@testset "JetSlantStackShiftSum, parity" begin
     theta = collect(-45:1.0:45)
     # the ray parameters that would give the same results as theta is
     p = @. -tan(deg2rad(theta))
@@ -93,7 +93,7 @@ end
     @test err_d < 1e-7
 end
 
-@test_skip @testset "JetSlantStack vs JetSlantStackShiftSum, parity" begin
+@testset "JetSlantStack vs JetSlantStackShiftSum, parity" begin
     theta = collect(-45:1.0:45)
     A1 = JopSlantStack(JetSpace(Float64, 128, 129); mode="depth", theta=theta, dz=0.01, h0=-0.64, dh=0.01)
     A2 = JopSlantStackShiftSum(JetSpace(Float64, 128, 129); mode="depth" , theta=theta, dz=0.01, h=collect(-0.64:0.01:0.64))
@@ -113,7 +113,7 @@ end
     @test similarity > 0.95
 end
 
-@test_skip @testset "JetSlantStack3D, dot product test, T = $(T), mode = $(mode), dip = $(dip)" for T in (Float32, Float64), mode in ("depth", "time"), (dip, azimuth) in ((0.0,0.0), (20.0, 30.0))
+@testset "JetSlantStack3D, dot product test, T = $(T), mode = $(mode), dip = $(dip)" for T in (Float32, Float64), mode in ("depth", "time"), (dip, azimuth) in ((0.0,0.0), (20.0, 30.0))
     Random.seed!(1234)
     A = JopSlantStack3D(JetSpace(T, 32, 8, 5); dz=10.0, dhx=10.0, dhy=5.0, hx0=-1000.0, hy0=-500.0, mode=mode, dip=dip, azimuth=azimuth, taperz=(0.3,0.3), taperhx=(0.3,0.3), taperhy=(0.3,0.3), taperkz=(0.3,0.3), taperkhx=(0.3,0.3), taperkhy=(0.3,0.3))
 
@@ -126,7 +126,7 @@ end
     @test isapprox(lhs,rhs,rtol=1e-4)
 end
 
-@test_skip @testset "JetSlantStack3D, time-depth parity" begin
+@testset "JetSlantStack3D, time-depth parity" begin
     theta = collect(-45:1.0:45)
     phi = [0.0, 90.0]
     
@@ -156,7 +156,7 @@ end
     @test err_d2 < 1e-7
 end
 
-@test_skip @testset "JetSlantStack3D, 3D vs 5D parity" begin
+@testset "JetSlantStack3D, 3D vs 5D parity" begin
     theta = collect(-45:1.0:45)
     phi = [0.0]
     px = @. -tan(deg2rad(theta))
@@ -182,7 +182,7 @@ end
     @test err_d < 1e-7
 end
 
-@test_skip @testset "JetSlantStack3D, dip invariance" begin
+@testset "JetSlantStack3D, dip invariance" begin
     theta = collect(-45:1.0:45)
     phi = [0.0]
     
@@ -204,7 +204,7 @@ end
     @test err_d < 1e-7
 end
 
-@test_skip @testset "JetSlantStackShiftSum3D, dot product test, T = $(T), mode = $(mode), dip = $(dip)" for T in (Float32, Float64), mode in ("depth", "time"), (dip, azimuth) in ((0.0,0.0), (30.0, 60.0), ([0.0], [0.0]))
+@testset "JetSlantStackShiftSum3D, dot product test, T = $(T), mode = $(mode), dip = $(dip)" for T in (Float32, Float64), mode in ("depth", "time"), (dip, azimuth) in ((0.0,0.0), (30.0, 60.0), ([0.0], [0.0]))
     if isa(dip, Array)
         dip = 90 .* rand(32)
         azimuth = 360 .* rand(32)
@@ -218,7 +218,7 @@ end
     @test isapprox(lhs,rhs,rtol=1e-4)
 end
 
-@test_skip @testset "JetSlantStackShiftSum3D, time-depth parity" begin
+@testset "JetSlantStackShiftSum3D, time-depth parity" begin
     theta = collect(-45:1.0:45)
     phi = [0.0, 90.0]
     
@@ -247,7 +247,7 @@ end
     @test err_d2 < 1e-7
 end
 
-@test_skip @testset "JetSlantStackShiftSum3D, dip parity" begin
+@testset "JetSlantStackShiftSum3D, dip parity" begin
     theta = collect(-45:1.0:45)
     phi = collect(0.0:45.0:135.0)
     
@@ -279,7 +279,7 @@ end
     @test err_d < 1e-7
 end
 
-@test_skip @testset "JetSlantStackShiftSum3D, dip invariance" begin
+@testset "JetSlantStackShiftSum3D, dip invariance" begin
     theta = collect(-45:1.0:45)
     phi = [0.0]
     
@@ -301,7 +301,7 @@ end
     @test err_d < 1e-7
 end
 
-@test_skip @testset "JetSlantStackShiftSum3D, offsets parity" begin
+@testset "JetSlantStackShiftSum3D, offsets parity" begin
     theta = collect(-45:5.0:45)
     phi = collect(0.0:45.0:135.0)
 
@@ -332,8 +332,8 @@ end
     @test err_d < 1e-7
 end
 
-@testset "JetSlantStack3D vs JetSlantStackShiftSum3D, parity" for dip in (0.0, 10.0)
-    theta = collect(-45:1.0:45)
+@testset "JetSlantStack3D vs JetSlantStackShiftSum3D, parity" for dip in (0.0, 60.0)
+    theta = collect(-65:1.0:65)
     phi = collect(0.0:45.0:135.0)
     azimuth = 45.0
     A1 = JopSlantStack3D(JetSpace(Float64, 128, 129, 5); mode="depth", theta=theta, phi=phi, dz=0.01, hx0=-0.64, dhx=0.01, hy0=0, dhy=0.01, dip=dip, azimuth=azimuth)
@@ -341,10 +341,10 @@ end
     m = zeros(domain(A1))
     for i = 1:129
         m[div(i,4)+20,i,1] = 1.0
-        m[div(i,3)+10,i,2] = -0.5
+        m[div(i,3)+10,i,2] = 1.0
     end
     m[16,64,1] = 1
-    m[64,96,5] = -0.2
+    m[64,96,1] = 1
     d1 = A1*m
     d2 = A2*m
 
@@ -355,7 +355,7 @@ end
     @test similarity > 0.95
 end
 
-@test_skip @testset "JopSlantStackShiftSum vs JopSlantStackShiftSum3D, parity" begin
+@testset "JopSlantStackShiftSum vs JopSlantStackShiftSum3D, parity" begin
     theta = collect(-45:1.0:45)
     phi = [0.0]
     A1 = JopSlantStackShiftSum(JetSpace(Float64, 128, 129); mode="depth" , theta=theta, dz=0.01, h=collect(-0.64:0.01:0.64))
