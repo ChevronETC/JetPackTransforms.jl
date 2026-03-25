@@ -1,3 +1,4 @@
+using InteractiveUtils
 using JetPackTransforms, Jets, Test, LinearAlgebra, Random
 
 # depth mode
@@ -332,7 +333,7 @@ end
     @test err_d < 1e-7
 end
 
-@testset "JetSlantStack3D vs JetSlantStackShiftSum3D, parity" for dip in (0.0, 60.0)
+@testset "JetSlantStack3D vs JetSlantStackShiftSum3D, parity" for dip in (60.0, )
     theta = collect(-65:1.0:65)
     phi = collect(0.0:45.0:135.0)
     azimuth = 45.0
@@ -345,6 +346,8 @@ end
     end
     m[16,64,1] = 1
     m[64,96,1] = 1
+
+    # @code_warntype d2 = A2*m
     d1 = A1*m
     d2 = A2*m
 

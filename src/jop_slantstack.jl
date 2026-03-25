@@ -310,8 +310,8 @@ function JopSlantStack3D_df!(d::AbstractArray{T,3}, m::AbstractArray{T,3}; mode,
     
     D = zeros(eltype(M), size(M,1), npx, npy)
     @threads for ip = 1:npx*npy
-        ipx = div(ip-1, npy) + 1
-        ipy = mod(ip-1, npy) + 1
+        ipy = div(ip-1, npx) + 1
+        ipx = mod(ip-1, npx) + 1
         factor = sqrt( (1 + tan(dip)^2) / (1 + tan(dip)^2 * cos(azimuth - py[ipy])^2) )
         for ikz = 1:div(nzfft,2)+1
             ikhx_m1, ikhx_p1, _khx, ikhy_m1, ikhy_p1, _khy = compute_kh(ikz, ipx, ipy, px, py, kz, khx, khy, nhxfft, nhyfft, factor)
@@ -361,8 +361,8 @@ function JopSlantStack3D_df!(d::AbstractArray{T,5}, m::AbstractArray{T,5}; mode,
 
     D = zeros(eltype(M), size(M,1), ny, nx, npx, npy)
     @threads for ip = 1:npx*npy
-        ipx = div(ip-1, npy) + 1
-        ipy = mod(ip-1, npy) + 1
+        ipy = div(ip-1, npx) + 1
+        ipx = mod(ip-1, npx) + 1
         factor = sqrt( (1 + tan(dip)^2) / (1 + tan(dip)^2 * cos(azimuth - py[ipy])^2) )
         for ikz = 1:div(nzfft,2)+1
             ikhx_m1, ikhx_p1, _khx, ikhy_m1, ikhy_p1, _khy = compute_kh(ikz, ipx, ipy, px, py, kz, khx, khy, nhxfft, nhyfft, factor)
@@ -411,8 +411,8 @@ function JopSlantStack3D_df′!(m::AbstractArray{T,3}, d::AbstractArray{T,3}; mo
 
     M = zeros(Complex{T}, div(nzfft,2)+1, nhxfft, nhyfft)
     for ip = 1:npx*npy
-        ipx = div(ip-1, npy) + 1
-        ipy = mod(ip-1, npy) + 1
+        ipy = div(ip-1, npx) + 1
+        ipx = mod(ip-1, npx) + 1
         factor = sqrt( (1 + tan(dip)^2) / (1 + tan(dip)^2 * cos(azimuth - py[ipy])^2) )
         for ikz = 1:div(nzfft,2)+1
             ikhx_m1, ikhx_p1, _khx, ikhy_m1, ikhy_p1, _khy = compute_kh(ikz, ipx, ipy, px, py, kz, khx, khy, nhxfft, nhyfft, factor)
@@ -465,8 +465,8 @@ function JopSlantStack3D_df′!(m::AbstractArray{T,5}, d::AbstractArray{T,5}; mo
 
     M = zeros(Complex{T}, div(nzfft,2)+1, ny, nx, nhxfft, nhyfft)
     for ip = 1:npx*npy
-        ipx = div(ip-1, npy) + 1
-        ipy = mod(ip-1, npy) + 1
+        ipy = div(ip-1, npx) + 1
+        ipx = mod(ip-1, npx) + 1
         factor = sqrt( (1 + tan(dip)^2) / (1 + tan(dip)^2 * cos(azimuth - py[ipy])^2) )
         for ikz = 1:div(nzfft,2)+1
             ikhx_m1, ikhx_p1, _khx, ikhy_m1, ikhy_p1, _khy = compute_kh(ikz, ipx, ipy, px, py, kz, khx, khy, nhxfft, nhyfft, factor)
@@ -616,12 +616,13 @@ function JopSlantStackShiftSum_df!(d::AbstractArray{T,2}, m::AbstractArray{T,2};
 
     d .= 0
     mtap = TZ * m
+    holder = zeros(T, nz, Threads.maxthreadid())
     @threads for ip = 1:np
         for ih = 1:nh
             shift = + h[ih] * p[ip] / dz
             if abs(shift) < nz
-                holder=_shift_forward(@view(mtap[:,ih]), shift)
-                d[:,ip] .+= holder
+                _shift_forward(@view(holder[:,Threads.threadid()]), @view(mtap[:,ih]), shift)
+                @views d[:,ip] .+= holder[:,Threads.threadid()]
             end
         end
     end
@@ -632,12 +633,13 @@ function JopSlantStackShiftSum_df′!(m::AbstractArray{T,2}, d::AbstractArray{T,
     nz, nh, np = size(m,1), size(m,2), length(p)
 
     mtap = zeros(T, nz, nh)
+    holder = zeros(T, nz, Threads.maxthreadid())
     @threads for ih = 1:nh
         for ip = 1:np
             shift = + h[ih] * p[ip] / dz
             if abs(shift) < nz
-                holder=_shift_adjoint(@view(d[:,ip]), shift)
-                @views mtap[:,ih] .+= holder
+                _shift_adjoint(@view(holder[:,Threads.threadid()]), @view(d[:,ip]), shift)
+                @views mtap[:,ih] .+= holder[:,Threads.threadid()]
             end
         end
     end
@@ -791,15 +793,16 @@ function JopSlantStackShiftSum3D_df_scalar!(d::AbstractArray{T,3}, m::AbstractAr
 
     d .= 0
     mtap = TZ * m
+    holder = zeros(T, nz, Threads.maxthreadid())
     @threads for ip = 1:npx*npy
-        ipx = div(ip-1, npy) + 1
-        ipy = mod(ip-1, npy) + 1
+        ipy = div(ip-1, npx) + 1
+        ipx = mod(ip-1, npx) + 1
         factor = sqrt( (1 + tan(dip)^2) / (1 + tan(dip)^2 * cos(azimuth - py[ipy])^2) )
         for ih = 1:nh
             shift = compute_shift(1, ih, ih, ipx, ipy, hx, hy, px, py, dz, factor)
             if abs(shift) < nz
-                holder=_shift_forward(@view(mtap[:,ih]), shift)
-                d[:,ipx,ipy] .+= holder
+                _shift_forward(@view(holder[:,Threads.threadid()]), @view(mtap[:,ih]), shift)
+                @views d[:,ipx,ipy] .+= holder[:,Threads.threadid()]
             end
         end
     end
@@ -819,16 +822,17 @@ function JopSlantStackShiftSum3D_df_scalar!(d::AbstractArray{T,3}, m::AbstractAr
 
     d .= 0
     mtap = TZ * m
+    holder = zeros(T, nz, Threads.maxthreadid())
     @threads for ip = 1:npx*npy
-        ipx = div(ip-1, npy) + 1
-        ipy = mod(ip-1, npy) + 1
+        ipy = div(ip-1, npx) + 1
+        ipx = mod(ip-1, npx) + 1
         factor = sqrt( (1 + tan(dip)^2) / (1 + tan(dip)^2 * cos(azimuth - py[ipy])^2) )
         for ihx = 1:nhx
             for ihy = 1:nhy
                 shift = compute_shift(1, ihx, ihy, ipx, ipy, hx, hy, px, py, dz, factor)
                 if abs(shift) < nz
-                    holder=_shift_forward(@view(mtap[:,ihx,ihy]), shift)
-                    d[:,ipx,ipy] .+= holder
+                    _shift_forward(@view(holder[:,Threads.threadid()]), @view(mtap[:,ihx,ihy]), shift)
+                    @views d[:,ipx,ipy] .+= holder[:,Threads.threadid()]
                 end
             end
         end
@@ -844,8 +848,8 @@ function JopSlantStackShiftSum3D_df_vector!(d::AbstractArray{T,3}, m::AbstractAr
     d .= 0
     mtap = TZ * m
     @threads for ip = 1:npx*npy
-        ipx = div(ip-1, npy) + 1
-        ipy = mod(ip-1, npy) + 1
+        ipy = div(ip-1, npx) + 1
+        ipx = mod(ip-1, npx) + 1
         factor = sqrt.( (1 .+ tan.(dip).^2) ./ (1 .+ tan.(dip).^2 .* cos.(azimuth .- py[ipy]).^2) )
         for ih = 1:nh
             for iz = 1:nz
@@ -868,8 +872,8 @@ function JopSlantStackShiftSum3D_df_vector!(d::AbstractArray{T,3}, m::AbstractAr
     d .= 0
     mtap = TZ * m
     @threads for ip = 1:npx*npy
-        ipx = div(ip-1, npy) + 1
-        ipy = mod(ip-1, npy) + 1
+        ipy = div(ip-1, npx) + 1
+        ipx = mod(ip-1, npx) + 1
         factor = sqrt.( (1 .+ tan.(dip).^2) ./ (1 .+ tan.(dip).^2 .* cos.(azimuth .- py[ipy]).^2) )
         for ihx = 1:nhx
             for ihy = 1:nhy
@@ -898,19 +902,21 @@ function JopSlantStackShiftSum3D_df_scalar′!(m::AbstractArray{T,2}, d::Abstrac
     end
 
     mtap = zeros(T, nz, nh)
+    acc = zeros(T, nz, Threads.maxthreadid())
+    holder = zeros(T, nz, Threads.maxthreadid())
     @threads for ih = 1:nh
-        acc = zeros(T, nz)
+        fill!(@view(acc[:, Threads.threadid()]), zero(T))
         for ipx = 1:npx
             for ipy = 1:npy
                 factor = sqrt( (1 + tan(dip)^2) / (1 + tan(dip)^2 * cos(azimuth - py[ipy])^2) )
                 shift = compute_shift(1, ih, ih, ipx, ipy, hx, hy, px, py, dz, factor)
                 if abs(shift) < nz
-                    holder=_shift_adjoint(@view(d[:,ipx,ipy]), shift)
-                    acc .+= holder
+                    _shift_adjoint(@view(holder[:,Threads.threadid()]), @view(d[:,ipx,ipy]), shift)
+                    @views acc[:, Threads.threadid()] .+= holder[:,Threads.threadid()]
                 end
             end
         end
-        mtap[:,ih] .= acc
+        @views mtap[:,ih] .= acc[:, Threads.threadid()]
     end
     m = TZ' * mtap
     m
@@ -928,21 +934,23 @@ function JopSlantStackShiftSum3D_df_scalar′!(m::AbstractArray{T,3}, d::Abstrac
     end
 
     mtap = zeros(T, nz, nhx, nhy)
-    @threads for ihx = 1:nhx
-        for ihy = 1:nhy
-            acc = zeros(T, nz)
-            for ipx = 1:npx
-                for ipy = 1:npy
-                    factor = sqrt( (1 + tan(dip)^2) / (1 + tan(dip)^2 * cos(azimuth - py[ipy])^2) )
-                    shift = compute_shift(1, ihx, ihy, ipx, ipy, hx, hy, px, py, dz, factor)
-                    if abs(shift) < nz
-                        holder=_shift_adjoint(@view(d[:,ipx,ipy]), shift)
-                        acc .+= holder
-                    end
+    acc = zeros(T, nz, Threads.maxthreadid())
+    holder = zeros(T, nz, Threads.maxthreadid())
+    @threads for ih = 1:nhx*nhy
+        ihy = div(ih-1, nhx) + 1
+        ihx = mod(ih-1, nhx) + 1
+        fill!(@view(acc[:, Threads.threadid()]), zero(T))
+        for ipx = 1:npx
+            for ipy = 1:npy
+                factor = sqrt( (1 + tan(dip)^2) / (1 + tan(dip)^2 * cos(azimuth - py[ipy])^2) )
+                shift = compute_shift(1, ihx, ihy, ipx, ipy, hx, hy, px, py, dz, factor)
+                if abs(shift) < nz
+                    _shift_adjoint(@view(holder[:, Threads.threadid()]), @view(d[:,ipx,ipy]), shift)
+                    @views acc[:, Threads.threadid()] .+= holder[:, Threads.threadid()]
                 end
             end
-            mtap[:,ihx,ihy] .= acc
         end
+        @views mtap[:,ihx,ihy] .= acc[:, Threads.threadid()]
     end
     m = TZ' * mtap
     m
@@ -1037,7 +1045,7 @@ function _sinc_kernel(δ, N)
     h .* hann(length(h))
 end
 
-function _shift_forward(x, shift, N = 7)
+function _shift_forward(x::AbstractArray{T,1}, shift::Real, N::Int = 7) where {T}
     ishift = round(Int, shift)
     frac = shift - ishift
     h = _sinc_kernel(frac, N)
@@ -1047,7 +1055,7 @@ function _shift_forward(x, shift, N = 7)
     x_frac[L+1 : L+length(x)]
 end
 
-function _shift_adjoint(x, shift, N = 7)
+function _shift_adjoint(x::AbstractArray{T,1}, shift::Real, N::Int = 7) where {T}
     ishift = round(Int, shift)
     frac = shift - ishift
     h = reverse(_sinc_kernel(frac, N))
@@ -1058,4 +1066,27 @@ function _shift_adjoint(x, shift, N = 7)
     x_pad[L+1 : L+n] .= x
     x_frac = conv(x_pad, h)
     circshift(@view(x_frac[m : m+n-1]), -ishift)
+end
+
+function _shift_forward(y::AbstractArray{T,1}, x::AbstractArray{T,1}, shift::Real, N::Int = 7) where {T}
+    ishift = round(Int, shift)
+    frac = shift - ishift
+    h = _sinc_kernel(frac, N)
+    L = length(h) ÷ 2
+    x_int = circshift(x, ishift)
+    x_frac = conv(x_int, h)
+    y .= x_frac[L+1 : L+length(x)]
+end
+
+function _shift_adjoint(y::AbstractArray{T,1}, x::AbstractArray{T,1}, shift::Real, N::Int = 7) where {T}
+    ishift = round(Int, shift)
+    frac = shift - ishift
+    h = reverse(_sinc_kernel(frac, N))
+    n = length(x)
+    m = length(h)
+    L = m ÷ 2
+    x_pad = zeros(eltype(x), n+m-1)
+    x_pad[L+1 : L+n] .= x
+    x_frac = conv(x_pad, h)
+    y .= circshift(@view(x_frac[m : m+n-1]), -ishift)
 end
