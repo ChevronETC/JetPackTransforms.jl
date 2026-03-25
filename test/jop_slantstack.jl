@@ -23,6 +23,36 @@ end
     @test i[2] == findfirst(x->x≈0, state(A).tant)
 end
 
+@testset "JetSlantStack, correctness advanced" begin
+    h0 = -100
+    dh = 1
+    dz = 1
+    nz = 200
+    h = collect(h0:dh:abs(h0))
+    nh = length(h)
+    og = zeros(Float32, nz, nh)
+    
+    # create a dipping event
+    dip = 20
+    iz0 = div(nz,2)
+    for ih = 1:nh
+        hx = h[ih]
+        z = tan(deg2rad(dip)) * hx + (iz0-1)*dz
+        iz = round(Int, div(z, dz)) + 1
+        og[iz,ih] = 1
+    end
+
+    θ = collect(-30:1:30)
+    
+    A = JopSlantStack(JetSpace(Float32, nz, nh); mode = "depth", theta = θ, dz = dz, dh = dh, h0 = h0)
+    ag = A * og
+
+    argmax_ag = Tuple(argmax(ag))
+    idip = findfirst(==(dip), θ)
+    @show argmax_ag, (iz0, idip)
+    @test argmax_ag == (iz0, idip)
+end
+
 # time mode
 @testset "JetSlantStack, dot product test" for T in (Float32, Float64)
     A = JopSlantStack(JetSpace(T, 64, 128); dz=0.004, dh=10.0, h0=-1000.0, mode="time")
@@ -35,7 +65,7 @@ end
     @test isapprox(lhs,rhs,rtol=1e-4)
 end
 
-@testset "JetSlantStack, correctness" for padz in (0.0, 0.2)
+@testset "JetSlantStack, correctness (time)" for padz in (0.0, 0.2)
     A = JopSlantStack(JetSpace(Float64, 64, 128); dz=0.004, dh=10.0, h0=-1000.0, padz, mode="time")
     m = zeros(domain(A))
     m[32,:] .= 1
@@ -125,6 +155,45 @@ end
 
     lhs, rhs = dot_product_test(A,rand(domain(A)),rand(range(A)))
     @test isapprox(lhs,rhs,rtol=1e-4)
+end
+
+@testset "JetSlantStack3D correctness" begin
+    hx0 = -100
+    hy0 = -100
+    dhx = 1
+    dhy = 1
+    dz = 1
+    nz = 200
+    nx = 1
+    ny = 1
+    hx = collect(hx0:dhx:abs(hx0))
+    hy = collect(hy0:dhy:abs(hy0))
+    nhx = length(hx)
+    nhy = length(hy)
+    og = zeros(Float32, nz, ny, nx, nhx, nhy)
+    
+    # create a dipping event
+    dip = 20
+    azimuth = 45
+    iz0 = div(nz,2)
+    for ihx = 1:nhx
+        for ihy = 1:nhy
+            z = tan(deg2rad(dip)) * (cos(deg2rad(azimuth)) * hx[ihx] + sin(deg2rad(azimuth)) * hy[ihy]) + (iz0-1)*dz
+            iz = round(Int, div(z, dz)) + 1
+            og[iz,1,1,ihx,ihy] = 1
+        end
+    end
+
+    θ = collect(-30:1:30)
+    ϕ = collect(0:45:135)
+    A = JopSlantStack3D(JetSpace(Float32, nz, ny, nx, nhx, nhy); mode = "depth", theta = θ, phi = ϕ, dz = dz, dhx = dhx, dhy = dhy, hx0 = hx0, hy0 = hy0)
+    ag = A * og
+
+    argmax_ag = Tuple(argmax(ag))
+    idip = findfirst(==(dip), θ)
+    iaz = findfirst(==(azimuth), ϕ)
+    @show argmax_ag, (iz0, 1, 1, idip, iaz)
+    @test argmax_ag == (iz0, 1, 1, idip, iaz)
 end
 
 @testset "JetSlantStack3D, time-depth parity" begin
