@@ -301,15 +301,14 @@ function JopSlantStack3D_df!(d::AbstractArray{T,3}, m::AbstractArray{T,3}; mode,
     end
 
     is_out_of_bounds = (ikhx_m1, ikhx_p1, ikhy_m1, ikhy_p1)->(ikhx_m1 < 1 || ikhx_p1 > nhxfft || ikhy_m1 < 1 || ikhy_p1 > nhyfft)
-
+    
     D = zeros(eltype(M), size(M,1), npx, npy)
     @threads for ip = 1:npx*npy
         ipx = div(ip-1, npy) + 1
         ipy = mod(ip-1, npy) + 1
-        num = tan(dip)^2 *sin(azimuth - py[ipy])*cos(azimuth - py[ipy])
-        denom = sqrt(1 + (tan(dip)*sin(azimuth - py[ipy]))^2)
+        factor = sqrt( (1 + tan(dip)^2) / (1 + tan(dip)^2 * cos(azimuth - py[ipy])^2) )
         for ikz = 1:div(nzfft,2)+1
-            ikhx_m1, ikhx_p1, _khx, ikhy_m1, ikhy_p1, _khy = compute_kh(ikz, ipx, ipy, px, py, kz, khx, khy, nhxfft, nhyfft, num, denom)
+            ikhx_m1, ikhx_p1, _khx, ikhy_m1, ikhy_p1, _khy = compute_kh(ikz, ipx, ipy, px, py, kz, khx, khy, nhxfft, nhyfft, factor)
 
             is_out_of_bounds(ikhx_m1, ikhx_p1, ikhy_m1, ikhy_p1) && continue
 
@@ -358,10 +357,9 @@ function JopSlantStack3D_df!(d::AbstractArray{T,5}, m::AbstractArray{T,5}; mode,
     @threads for ip = 1:npx*npy
         ipx = div(ip-1, npy) + 1
         ipy = mod(ip-1, npy) + 1
-        num = tan(dip)^2 *sin(azimuth - py[ipy])*cos(azimuth - py[ipy])
-        denom = sqrt(1 + (tan(dip)*sin(azimuth - py[ipy]))^2)
+        factor = sqrt( (1 + tan(dip)^2) / (1 + tan(dip)^2 * cos(azimuth - py[ipy])^2) )
         for ikz = 1:div(nzfft,2)+1
-            ikhx_m1, ikhx_p1, _khx, ikhy_m1, ikhy_p1, _khy = compute_kh(ikz, ipx, ipy, px, py, kz, khx, khy, nhxfft, nhyfft, num, denom)
+            ikhx_m1, ikhx_p1, _khx, ikhy_m1, ikhy_p1, _khy = compute_kh(ikz, ipx, ipy, px, py, kz, khx, khy, nhxfft, nhyfft, factor)
 
             is_out_of_bounds(ikhx_m1, ikhx_p1, ikhy_m1, ikhy_p1) && continue
 
@@ -409,10 +407,9 @@ function JopSlantStack3D_df′!(m::AbstractArray{T,3}, d::AbstractArray{T,3}; mo
     for ip = 1:npx*npy
         ipx = div(ip-1, npy) + 1
         ipy = mod(ip-1, npy) + 1
-        num = tan(dip)^2 *sin(azimuth - py[ipy])*cos(azimuth - py[ipy])
-        denom = sqrt(1 + (tan(dip)*sin(azimuth - py[ipy]))^2)
+        factor = sqrt( (1 + tan(dip)^2) / (1 + tan(dip)^2 * cos(azimuth - py[ipy])^2) )
         for ikz = 1:div(nzfft,2)+1
-            ikhx_m1, ikhx_p1, _khx, ikhy_m1, ikhy_p1, _khy = compute_kh(ikz, ipx, ipy, px, py, kz, khx, khy, nhxfft, nhyfft, num, denom)
+            ikhx_m1, ikhx_p1, _khx, ikhy_m1, ikhy_p1, _khy = compute_kh(ikz, ipx, ipy, px, py, kz, khx, khy, nhxfft, nhyfft, factor)
 
             is_out_of_bounds(ikhx_m1, ikhx_p1, ikhy_m1, ikhy_p1) && continue
 
@@ -464,10 +461,9 @@ function JopSlantStack3D_df′!(m::AbstractArray{T,5}, d::AbstractArray{T,5}; mo
     for ip = 1:npx*npy
         ipx = div(ip-1, npy) + 1
         ipy = mod(ip-1, npy) + 1
-        num = tan(dip)^2 *sin(azimuth - py[ipy])*cos(azimuth - py[ipy])
-        denom = sqrt(1 + (tan(dip)*sin(azimuth - py[ipy]))^2)
+        factor = sqrt( (1 + tan(dip)^2) / (1 + tan(dip)^2 * cos(azimuth - py[ipy])^2) )
         for ikz = 1:div(nzfft,2)+1
-            ikhx_m1, ikhx_p1, _khx, ikhy_m1, ikhy_p1, _khy = compute_kh(ikz, ipx, ipy, px, py, kz, khx, khy, nhxfft, nhyfft, num, denom)
+            ikhx_m1, ikhx_p1, _khx, ikhy_m1, ikhy_p1, _khy = compute_kh(ikz, ipx, ipy, px, py, kz, khx, khy, nhxfft, nhyfft, factor)
 
             is_out_of_bounds(ikhx_m1, ikhx_p1, ikhy_m1, ikhy_p1) && continue
 
@@ -491,7 +487,7 @@ function JopSlantStack3D_df′!(m::AbstractArray{T,5}, d::AbstractArray{T,5}; mo
     m .= TX * (brfft(TK * M, nzfft, (1,4,5))[1:nz,:,:,1:nhx,1:nhy])
 end
 
-@inline function slantstack_khxy_from_kz(ikz::Int64, ipx::Int64, ipy::Int64, px, py, kz, khx, khy, nhxfft, nhyfft, num, denom)
+@inline function slantstack_khxy_from_kz(ikz::Int64, ipx::Int64, ipy::Int64, px, py, kz, khx, khy, nhxfft, nhyfft, factor)
     _khx = kz[ikz]*px[ipx]*cos(py[ipy])
     _khy = kz[ikz]*px[ipx]*sin(py[ipy])
 
@@ -508,9 +504,9 @@ end
     ikhx_m1, ikhx_p1, _khx, ikhy_m1, ikhy_p1, _khy
 end
 
-@inline function slantstack_khxy_from_kz_geologic(ikz::Int64, ipx::Int64, ipy::Int64, px, py, kz, khx, khy, nhxfft, nhyfft, num, denom)
-    _khx = kz[ikz]*px[ipx]*(cos(py[ipy]) + sin(py[ipy])*num)/denom
-    _khy = kz[ikz]*px[ipx]*(sin(py[ipy]) - cos(py[ipy])*num)/denom
+@inline function slantstack_khxy_from_kz_geologic(ikz::Int64, ipx::Int64, ipy::Int64, px, py, kz, khx, khy, nhxfft, nhyfft, factor)
+    _khx = kz[ikz]*px[ipx]*cos(py[ipy])*factor
+    _khy = kz[ikz]*px[ipx]*sin(py[ipy])*factor
 
     ikhx_m1 = floor(Int64, _khx/khx[2]) + 1
     ikhx_p1 = ceil(Int64, _khx/khx[2]) + 1
@@ -525,7 +521,7 @@ end
     ikhx_m1, ikhx_p1, _khx, ikhy_m1, ikhy_p1, _khy
 end
 
-@inline function slantstack_khxy_from_frequency(iω::Int64, ipx::Int64, ipy::Int64, px, py, ω, khx, khy, nhxfft, nhyfft, num, denom)
+@inline function slantstack_khxy_from_frequency(iω::Int64, ipx::Int64, ipy::Int64, px, py, ω, khx, khy, nhxfft, nhyfft, factor)
     _khx = px[ipx]*ω[iω]
     _khy = py[ipy]*ω[iω]
 
@@ -782,17 +778,15 @@ function JopSlantStackShiftSum3D_df_scalar!(d::AbstractArray{T,3}, m::AbstractAr
 
     d .= 0
     mtap = TZ * m
-    @threads for ipx = 1:npx
-        holder = zeros(T, nz)
-        for ipy = 1:npy
-            num = tan(dip)^2 *sin(azimuth - py[ipy])*cos(azimuth - py[ipy])
-            denom = sqrt(1 + (tan(dip)*sin(azimuth - py[ipy]))^2)
-            for ih = 1:nh
-                shift = compute_shift(1, ih, ih, ipx, ipy, hx, hy, px, py, dz, num, denom)
-                if abs(shift) < nz
-                    holder=_shift_forward(@view(mtap[:,ih]), shift)
-                    d[:,ipx,ipy] .+= holder
-                end
+    @threads for ip = 1:npx*npy
+        ipx = div(ip-1, npy) + 1
+        ipy = mod(ip-1, npy) + 1
+        factor = sqrt( (1 + tan(dip)^2) / (1 + tan(dip)^2 * cos(azimuth - py[ipy])^2) )
+        for ih = 1:nh
+            shift = compute_shift(1, ih, ih, ipx, ipy, hx, hy, px, py, dz, factor)
+            if abs(shift) < nz
+                holder=_shift_forward(@view(mtap[:,ih]), shift)
+                d[:,ipx,ipy] .+= holder
             end
         end
     end
@@ -812,18 +806,16 @@ function JopSlantStackShiftSum3D_df_scalar!(d::AbstractArray{T,3}, m::AbstractAr
 
     d .= 0
     mtap = TZ * m
-    @threads for ipx = 1:npx
-        holder = zeros(T, nz)
-        for ipy = 1:npy
-            num = tan(dip)^2 *sin(azimuth - py[ipy])*cos(azimuth - py[ipy])
-            denom = sqrt(1 + (tan(dip)*sin(azimuth - py[ipy]))^2)
-            for ihx = 1:nhx
-                for ihy = 1:nhy
-                    shift = compute_shift(1, ihx, ihy, ipx, ipy, hx, hy, px, py, dz, num, denom)
-                    if abs(shift) < nz
-                        holder=_shift_forward(@view(mtap[:,ihx,ihy]), shift)
-                        d[:,ipx,ipy] .+= holder
-                    end
+    @threads for ip = 1:npx*npy
+        ipx = div(ip-1, npy) + 1
+        ipy = mod(ip-1, npy) + 1
+        factor = sqrt( (1 + tan(dip)^2) / (1 + tan(dip)^2 * cos(azimuth - py[ipy])^2) )
+        for ihx = 1:nhx
+            for ihy = 1:nhy
+                shift = compute_shift(1, ihx, ihy, ipx, ipy, hx, hy, px, py, dz, factor)
+                if abs(shift) < nz
+                    holder=_shift_forward(@view(mtap[:,ihx,ihy]), shift)
+                    d[:,ipx,ipy] .+= holder
                 end
             end
         end
@@ -838,18 +830,16 @@ function JopSlantStackShiftSum3D_df_vector!(d::AbstractArray{T,3}, m::AbstractAr
     
     d .= 0
     mtap = TZ * m
-    @threads for ipx = 1:npx
-        holder = zeros(T, nz)
-        for ipy = 1:npy
-            num = tan.(dip).^2 .* sin.(azimuth .- py[ipy]) .* cos.(azimuth .- py[ipy])
-            denom = sqrt.(1 .+ (tan.(dip) .* sin.(azimuth .- py[ipy])).^2)
-            for ih = 1:nh
-                for iz = 1:nz
-                    shift = compute_shift(iz, ih, ih, ipx, ipy, hx, hy, px, py, dz, num, denom)
-                    if abs(shift) < nz 
-                        holder=_shift_forward(@view(mtap[:,ih]), shift)
-                        d[iz,ipx,ipy] += holder[iz]
-                    end
+    @threads for ip = 1:npx*npy
+        ipx = div(ip-1, npy) + 1
+        ipy = mod(ip-1, npy) + 1
+        factor = sqrt.( (1 .+ tan.(dip).^2) ./ (1 .+ tan.(dip).^2 .* cos.(azimuth .- py[ipy]).^2) )
+        for ih = 1:nh
+            for iz = 1:nz
+                shift = compute_shift(iz, ih, ih, ipx, ipy, hx, hy, px, py, dz, factor)
+                if abs(shift) < nz 
+                    holder=_shift_forward(@view(mtap[:,ih]), shift)
+                    d[iz,ipx,ipy] += holder[iz]
                 end
             end
         end
@@ -864,19 +854,17 @@ function JopSlantStackShiftSum3D_df_vector!(d::AbstractArray{T,3}, m::AbstractAr
     
     d .= 0
     mtap = TZ * m
-    @threads for ipx = 1:npx
-        holder = zeros(T, nz)
-        for ipy = 1:npy
-            num = tan.(dip).^2 .* sin.(azimuth .- py[ipy]) .* cos.(azimuth .- py[ipy])
-            denom = sqrt.(1 .+ (tan.(dip) .* sin.(azimuth .- py[ipy])).^2)
-            for ihx = 1:nhx
-                for ihy = 1:nhy
-                    for iz = 1:nz
-                        shift = compute_shift(iz, ihx, ihy, ipx, ipy, hx, hy, px, py, dz, num, denom)
-                        if abs(shift) < nz 
-                            holder=_shift_forward(@view(mtap[:,ihx,ihy]), shift)
-                            d[iz,ipx,ipy] += holder[iz]
-                        end
+    @threads for ip = 1:npx*npy
+        ipx = div(ip-1, npy) + 1
+        ipy = mod(ip-1, npy) + 1
+        factor = sqrt.( (1 .+ tan.(dip).^2) ./ (1 .+ tan.(dip).^2 .* cos.(azimuth .- py[ipy]).^2) )
+        for ihx = 1:nhx
+            for ihy = 1:nhy
+                for iz = 1:nz
+                    shift = compute_shift(iz, ihx, ihy, ipx, ipy, hx, hy, px, py, dz, factor)
+                    if abs(shift) < nz 
+                        holder=_shift_forward(@view(mtap[:,ihx,ihy]), shift)
+                        d[iz,ipx,ipy] += holder[iz]
                     end
                 end
             end
@@ -899,12 +887,10 @@ function JopSlantStackShiftSum3D_df_scalar′!(m::AbstractArray{T,2}, d::Abstrac
     mtap = zeros(T, nz, nh)
     @threads for ih = 1:nh
         acc = zeros(T, nz)
-        holder = zeros(T, nz)
         for ipx = 1:npx
             for ipy = 1:npy
-                num = tan(dip)^2 *sin(azimuth - py[ipy])*cos(azimuth - py[ipy])
-                denom = sqrt(1 + (tan(dip)*sin(azimuth - py[ipy]))^2)
-                shift = compute_shift(1, ih, ih, ipx, ipy, hx, hy, px, py, dz, num, denom)
+                factor = sqrt( (1 + tan(dip)^2) / (1 + tan(dip)^2 * cos(azimuth - py[ipy])^2) )
+                shift = compute_shift(1, ih, ih, ipx, ipy, hx, hy, px, py, dz, factor)
                 if abs(shift) < nz
                     holder=_shift_adjoint(@view(d[:,ipx,ipy]), shift)
                     acc .+= holder
@@ -932,12 +918,10 @@ function JopSlantStackShiftSum3D_df_scalar′!(m::AbstractArray{T,3}, d::Abstrac
     @threads for ihx = 1:nhx
         for ihy = 1:nhy
             acc = zeros(T, nz)
-            holder = zeros(T, nz)
             for ipx = 1:npx
                 for ipy = 1:npy
-                    num = tan(dip)^2 *sin(azimuth - py[ipy])*cos(azimuth - py[ipy])
-                    denom = sqrt(1 + (tan(dip)*sin(azimuth - py[ipy]))^2)
-                    shift = compute_shift(1, ihx, ihy, ipx, ipy, hx, hy, px, py, dz, num, denom)
+                    factor = sqrt( (1 + tan(dip)^2) / (1 + tan(dip)^2 * cos(azimuth - py[ipy])^2) )
+                    shift = compute_shift(1, ihx, ihy, ipx, ipy, hx, hy, px, py, dz, factor)
                     if abs(shift) < nz
                         holder=_shift_adjoint(@view(d[:,ipx,ipy]), shift)
                         acc .+= holder
@@ -962,10 +946,9 @@ function JopSlantStackShiftSum3D_df_vector′!(m::AbstractArray{T,2}, d::Abstrac
         holder = zeros(T, nz)
         for ipx = 1:npx
             for ipy = 1:npy
-                num = tan.(dip).^2 .* sin.(azimuth .- py[ipy]) .* cos.(azimuth .- py[ipy])
-                denom = sqrt.(1 .+ (tan.(dip) .* sin.(azimuth .- py[ipy])).^2)
+                factor = sqrt.( (1 .+ tan.(dip).^2) ./ (1 .+ tan.(dip).^2 .* cos.(azimuth .- py[ipy]).^2) )
                 for iz = 1:nz
-                    shift = compute_shift(iz, ih, ih, ipx, ipy, hx, hy, px, py, dz, num, denom)
+                    shift = compute_shift(iz, ih, ih, ipx, ipy, hx, hy, px, py, dz, factor)
                     if abs(shift) < nz
                         fill!(holder, zero(T))
                         holder[iz] = d[iz,ipx,ipy]
@@ -992,10 +975,9 @@ function JopSlantStackShiftSum3D_df_vector′!(m::AbstractArray{T,3}, d::Abstrac
             holder = zeros(T, nz)
             for ipx = 1:npx
                 for ipy = 1:npy
-                    num = tan.(dip).^2 .* sin.(azimuth .- py[ipy]) .* cos.(azimuth .- py[ipy])
-                    denom = sqrt.(1 .+ (tan.(dip) .* sin.(azimuth .- py[ipy])).^2)
+                    factor = sqrt.( (1 .+ tan.(dip).^2) ./ (1 .+ tan.(dip).^2 .* cos.(azimuth .- py[ipy]).^2) )
                     for iz = 1:nz
-                        shift = compute_shift(iz, ihx, ihy, ipx, ipy, hx, hy, px, py, dz, num, denom)
+                        shift = compute_shift(iz, ihx, ihy, ipx, ipy, hx, hy, px, py, dz, factor)
                         if abs(shift) < nz
                             fill!(holder, zero(T))
                             holder[iz] = d[iz,ipx,ipy]
@@ -1011,28 +993,28 @@ function JopSlantStackShiftSum3D_df_vector′!(m::AbstractArray{T,3}, d::Abstrac
     m
 end
 
-@inline function slantstack_shift_px_py(iz::Int64, ihx::Int64, ihy::Int64, ipx::Int64, ipy::Int64, hx, hy, px, py, dz, num::Real, denom::Real)
+@inline function slantstack_shift_px_py(iz::Int64, ihx::Int64, ihy::Int64, ipx::Int64, ipy::Int64, hx, hy, px, py, dz, factor::Real)
     # for time domain, the shift is given by (hx*px + hy*py) / dz
-    shift = + (hx[ihx] * px[ipx] + hy[ihy] * py[ipy]) / dz
-    shift
+    shift = + hx[ihx] * px[ipx] + hy[ihy] * py[ipy]
+    shift / dz
 end
 
-@inline function slantstack_shift_theta_phi(iz::Int64, ihx::Int64, ihy::Int64, ipx::Int64, ipy::Int64, hx, hy, px, py, dz, num::Real, denom::Real)
+@inline function slantstack_shift_theta_phi(iz::Int64, ihx::Int64, ihy::Int64, ipx::Int64, ipy::Int64, hx, hy, px, py, dz, factor::Real)
     # for depth domain ignoring geologic dip, the shift is given by (-hx*tan(θ)*cos(ϕ) - hy*tan(θ)*sin(ϕ)) / dz
-    shift = + (hx[ihx] * px[ipx] * cos(py[ipy]) + hy[ihy] * px[ipx] * sin(py[ipy])) / dz
-    shift
-end
-
-@inline function slantstack_shift_theta_phi_geologic(iz::Int64, ihx::Int64, ihy::Int64, ipx::Int64, ipy::Int64, hx, hy, px, py, dz, num::Real, denom::Real)
-    # for depth domain accounting for geologic dip, the shift is given by (-hx*tan(θ)*(cos(ϕ)/denom + sin(ϕ)*num/denom) - hy*tan(θ)*(sin(ϕ)/denom - cos(ϕ)*num/denom)) / dz
-    shift = + hx[ihx] * px[ipx] * (cos(py[ipy]) / denom + sin(py[ipy]) * num / denom) + hy[ihy] * px[ipx] * (sin(py[ipy]) / denom - cos(py[ipy]) * num / denom)
+    shift = + hx[ihx] * px[ipx] * cos(py[ipy]) + hy[ihy] * px[ipx] * sin(py[ipy])
     shift / dz
 end
 
-@inline function slantstack_shift_theta_phi_geologic(iz::Int64, ihx::Int64, ihy::Int64, ipx::Int64, ipy::Int64, hx, hy, px, py, dz, num::AbstractArray{T,1}, denom::AbstractArray{T,1}) where {T}
-    # for depth domain accounting for geologic dip, the shift is given by (-hx*tan(θ)*(cos(ϕ)/denom + sin(ϕ)*num/denom) - hy*tan(θ)*(sin(ϕ)/denom - cos(ϕ)*num/denom)) / dz
-    shift = + hx[ihx] * px[ipx] * (cos(py[ipy]) / denom[iz] + sin(py[ipy]) * num[iz] / denom[iz]) + hy[ihy] * px[ipx] * (sin(py[ipy]) / denom[iz] - cos(py[ipy]) * num[iz] / denom[iz])
-    shift / dz
+@inline function slantstack_shift_theta_phi_geologic(iz::Int64, ihx::Int64, ihy::Int64, ipx::Int64, ipy::Int64, hx, hy, px, py, dz, factor::Real)
+    # for depth domain accounting for geologic dip, the shift is given by (-hx*tan(θ)*cos(ϕ)*factor - hy*tan(θ)*sin(ϕ)*factor) / dz
+    shift = + hx[ihx] * px[ipx] * cos(py[ipy]) + hy[ihy] * px[ipx] * sin(py[ipy])
+    shift * factor / dz
+end
+
+@inline function slantstack_shift_theta_phi_geologic(iz::Int64, ihx::Int64, ihy::Int64, ipx::Int64, ipy::Int64, hx, hy, px, py, dz, factor::AbstractArray{T,1}) where {T}
+    # for depth domain accounting for geologic dip, the shift is given by (-hx*tan(θ)*cos(ϕ)*factor - hy*tan(θ)*sin(ϕ)*factor) / dz
+    shift = + hx[ihx] * px[ipx] * cos(py[ipy]) + hy[ihy] * px[ipx] * sin(py[ipy])
+    shift * factor[iz] / dz
 end
 
 # helper functions to build a compact sinc kernel for forward and adjoint shifting in 1D
