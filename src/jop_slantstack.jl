@@ -621,7 +621,7 @@ function JopSlantStackShiftSum_df!(d::AbstractArray{T,2}, m::AbstractArray{T,2};
         for ih = 1:nh
             shift = + h[ih] * p[ip] / dz
             if abs(shift) < nz
-                _shift_forward(@view(holder[:,Threads.threadid()]), @view(mtap[:,ih]), shift)
+                _shift_forward!(@view(holder[:,Threads.threadid()]), @view(mtap[:,ih]), shift)
                 @views d[:,ip] .+= holder[:,Threads.threadid()]
             end
         end
@@ -638,7 +638,7 @@ function JopSlantStackShiftSum_df′!(m::AbstractArray{T,2}, d::AbstractArray{T,
         for ip = 1:np
             shift = + h[ih] * p[ip] / dz
             if abs(shift) < nz
-                _shift_adjoint(@view(holder[:,Threads.threadid()]), @view(d[:,ip]), shift)
+                _shift_adjoint!(@view(holder[:,Threads.threadid()]), @view(d[:,ip]), shift)
                 @views mtap[:,ih] .+= holder[:,Threads.threadid()]
             end
         end
@@ -801,7 +801,7 @@ function JopSlantStackShiftSum3D_df_scalar!(d::AbstractArray{T,3}, m::AbstractAr
         for ih = 1:nh
             shift = compute_shift(1, ih, ih, ipx, ipy, hx, hy, px, py, dz, factor)
             if abs(shift) < nz
-                _shift_forward(@view(holder[:,Threads.threadid()]), @view(mtap[:,ih]), shift)
+                _shift_forward!(@view(holder[:,Threads.threadid()]), @view(mtap[:,ih]), shift)
                 @views d[:,ipx,ipy] .+= holder[:,Threads.threadid()]
             end
         end
@@ -831,7 +831,7 @@ function JopSlantStackShiftSum3D_df_scalar!(d::AbstractArray{T,3}, m::AbstractAr
             for ihy = 1:nhy
                 shift = compute_shift(1, ihx, ihy, ipx, ipy, hx, hy, px, py, dz, factor)
                 if abs(shift) < nz
-                    _shift_forward(@view(holder[:,Threads.threadid()]), @view(mtap[:,ihx,ihy]), shift)
+                    _shift_forward!(@view(holder[:,Threads.threadid()]), @view(mtap[:,ihx,ihy]), shift)
                     @views d[:,ipx,ipy] .+= holder[:,Threads.threadid()]
                 end
             end
@@ -855,8 +855,9 @@ function JopSlantStackShiftSum3D_df_vector!(d::AbstractArray{T,3}, m::AbstractAr
             for iz = 1:nz
                 shift = compute_shift(iz, ih, ih, ipx, ipy, hx, hy, px, py, dz, factor)
                 if abs(shift) < nz 
-                    holder=_shift_forward(@view(mtap[:,ih]), shift)
-                    d[iz,ipx,ipy] += holder[iz]
+                    # holder=_shift_forward(@view(mtap[:,ih]), shift)
+                    # d[iz,ipx,ipy] += holder[iz]
+                    d[iz,ipx,ipy] += _interpolate_forward(@view(mtap[:,ih]), iz - shift)
                 end
             end
         end
@@ -880,8 +881,7 @@ function JopSlantStackShiftSum3D_df_vector!(d::AbstractArray{T,3}, m::AbstractAr
                 for iz = 1:nz
                     shift = compute_shift(iz, ihx, ihy, ipx, ipy, hx, hy, px, py, dz, factor)
                     if abs(shift) < nz 
-                        holder=_shift_forward(@view(mtap[:,ihx,ihy]), shift)
-                        d[iz,ipx,ipy] += holder[iz]
+                        d[iz,ipx,ipy] += _interpolate_forward(@view(mtap[:,ihx,ihy]), iz - shift)
                     end
                 end
             end
@@ -911,7 +911,7 @@ function JopSlantStackShiftSum3D_df_scalar′!(m::AbstractArray{T,2}, d::Abstrac
                 factor = sqrt( (1 + tan(dip)^2) / (1 + tan(dip)^2 * cos(azimuth - py[ipy])^2) )
                 shift = compute_shift(1, ih, ih, ipx, ipy, hx, hy, px, py, dz, factor)
                 if abs(shift) < nz
-                    _shift_adjoint(@view(holder[:,Threads.threadid()]), @view(d[:,ipx,ipy]), shift)
+                    _shift_adjoint!(@view(holder[:,Threads.threadid()]), @view(d[:,ipx,ipy]), shift)
                     @views acc[:, Threads.threadid()] .+= holder[:,Threads.threadid()]
                 end
             end
@@ -945,7 +945,7 @@ function JopSlantStackShiftSum3D_df_scalar′!(m::AbstractArray{T,3}, d::Abstrac
                 factor = sqrt( (1 + tan(dip)^2) / (1 + tan(dip)^2 * cos(azimuth - py[ipy])^2) )
                 shift = compute_shift(1, ihx, ihy, ipx, ipy, hx, hy, px, py, dz, factor)
                 if abs(shift) < nz
-                    _shift_adjoint(@view(holder[:, Threads.threadid()]), @view(d[:,ipx,ipy]), shift)
+                    _shift_adjoint!(@view(holder[:, Threads.threadid()]), @view(d[:,ipx,ipy]), shift)
                     @views acc[:, Threads.threadid()] .+= holder[:, Threads.threadid()]
                 end
             end
@@ -963,18 +963,13 @@ function JopSlantStackShiftSum3D_df_vector′!(m::AbstractArray{T,2}, d::Abstrac
 
     mtap = zeros(T, nz, nh)
     @threads for ih = 1:nh
-        acc = zeros(T, nz)
-        holder = zeros(T, nz)
         for ipx = 1:npx
             for ipy = 1:npy
                 factor = sqrt.( (1 .+ tan.(dip).^2) ./ (1 .+ tan.(dip).^2 .* cos.(azimuth .- py[ipy]).^2) )
                 for iz = 1:nz
                     shift = compute_shift(iz, ih, ih, ipx, ipy, hx, hy, px, py, dz, factor)
                     if abs(shift) < nz
-                        fill!(holder, zero(T))
-                        holder[iz] = d[iz,ipx,ipy]
-                        acc=_shift_adjoint(holder, shift)
-                        mtap[:,ih] .+= acc
+                        _interpolate_adjoint!(@view(mtap[:,ih]), d[iz,ipx,ipy], iz - shift)
                     end
                 end
             end
@@ -990,21 +985,16 @@ function JopSlantStackShiftSum3D_df_vector′!(m::AbstractArray{T,3}, d::Abstrac
     compute_shift = slantstack_shift_theta_phi_geologic
 
     mtap = zeros(T, nz, nhx, nhy)
-    @threads for ihx = 1:nhx
-        for ihy = 1:nhy
-            acc = zeros(T, nz)
-            holder = zeros(T, nz)
-            for ipx = 1:npx
-                for ipy = 1:npy
-                    factor = sqrt.( (1 .+ tan.(dip).^2) ./ (1 .+ tan.(dip).^2 .* cos.(azimuth .- py[ipy]).^2) )
-                    for iz = 1:nz
-                        shift = compute_shift(iz, ihx, ihy, ipx, ipy, hx, hy, px, py, dz, factor)
-                        if abs(shift) < nz
-                            fill!(holder, zero(T))
-                            holder[iz] = d[iz,ipx,ipy]
-                            acc=_shift_adjoint(holder, shift)
-                            mtap[:,ihx,ihy] .+= acc
-                        end
+    @threads for ih = 1:nhx*nhy
+        ihy = div(ih-1, nhx) + 1
+        ihx = mod(ih-1, nhx) + 1
+        for ipx = 1:npx
+            for ipy = 1:npy
+                factor = sqrt.( (1 .+ tan.(dip).^2) ./ (1 .+ tan.(dip).^2 .* cos.(azimuth .- py[ipy]).^2) )
+                for iz = 1:nz
+                    shift = compute_shift(iz, ihx, ihy, ipx, ipy, hx, hy, px, py, dz, factor)
+                    if abs(shift) < nz
+                        _interpolate_adjoint!(@view(mtap[:,ihx,ihy]), d[iz,ipx,ipy], iz - shift)
                     end
                 end
             end
@@ -1038,49 +1028,48 @@ end
     shift * factor[iz] / dz
 end
 
-# helper functions to build a compact sinc kernel for forward and adjoint shifting in 1D
-function _sinc_kernel(δ, N)
+# helper functions to build a compact sinc kernel for forward and adjoint shifting/interpolation in 1D
+
+function _shift_zeropad(x::AbstractVector{T}, s::Int) where {T}
+    y = zeros(T, length(x))
+    n = length(x)
+    src_lo = max(1, 1 - s)
+    src_hi = min(n, n - s)
+    if src_lo <= src_hi
+        dst_lo = src_lo + s
+        dst_hi = src_hi + s
+        @views y[dst_lo:dst_hi] .= x[src_lo:src_hi]
+    end
+    return y
+end
+
+function _sinc_kernel(δ::Real, N::Int)
     n = -(N÷2):(N÷2)
     h = sinc.(n .- δ)
     h .* hann(length(h))
 end
 
-function _shift_forward(x::AbstractArray{T,1}, shift::Real, N::Int = 7) where {T}
+function _shift_forward!(y::AbstractArray{T,1}, x::AbstractArray{T,1}, shift::Real, N::Int = 7) where {T}
     ishift = round(Int, shift)
     frac = shift - ishift
+    if frac == 0.0
+        y .= _shift_zeropad(x, ishift)
+        return nothing
+    end
     h = _sinc_kernel(frac, N)
     L = length(h) ÷ 2
-    x_int = circshift(x, ishift)
-    x_frac = conv(x_int, h)
-    x_frac[L+1 : L+length(x)]
-end
-
-function _shift_adjoint(x::AbstractArray{T,1}, shift::Real, N::Int = 7) where {T}
-    ishift = round(Int, shift)
-    frac = shift - ishift
-    h = reverse(_sinc_kernel(frac, N))
-    n = length(x)
-    m = length(h)
-    L = m ÷ 2
-    x_pad = zeros(eltype(x), n+m-1)
-    x_pad[L+1 : L+n] .= x
-    x_frac = conv(x_pad, h)
-    circshift(@view(x_frac[m : m+n-1]), -ishift)
-end
-
-function _shift_forward(y::AbstractArray{T,1}, x::AbstractArray{T,1}, shift::Real, N::Int = 7) where {T}
-    ishift = round(Int, shift)
-    frac = shift - ishift
-    h = _sinc_kernel(frac, N)
-    L = length(h) ÷ 2
-    x_int = circshift(x, ishift)
+    x_int = _shift_zeropad(x, ishift)
     x_frac = conv(x_int, h)
     y .= x_frac[L+1 : L+length(x)]
 end
 
-function _shift_adjoint(y::AbstractArray{T,1}, x::AbstractArray{T,1}, shift::Real, N::Int = 7) where {T}
+function _shift_adjoint!(y::AbstractArray{T,1}, x::AbstractArray{T,1}, shift::Real, N::Int = 7) where {T}
     ishift = round(Int, shift)
     frac = shift - ishift
+    if frac == 0.0
+        y .= _shift_zeropad(x, -ishift)
+        return nothing
+    end
     h = reverse(_sinc_kernel(frac, N))
     n = length(x)
     m = length(h)
@@ -1088,5 +1077,48 @@ function _shift_adjoint(y::AbstractArray{T,1}, x::AbstractArray{T,1}, shift::Rea
     x_pad = zeros(eltype(x), n+m-1)
     x_pad[L+1 : L+n] .= x
     x_frac = conv(x_pad, h)
-    y .= circshift(@view(x_frac[m : m+n-1]), -ishift)
+    y .= _shift_zeropad(@view(x_frac[m : m+n-1]), -ishift)
+end
+
+function _interpolate_forward(x::AbstractArray{T,1}, loc::Real, N::Int = 7) where {T}
+    iloc = round(Int, loc)
+    frac = loc - iloc
+    if frac == 0.0 && 1 <= iloc <= length(x)
+        return x[iloc]
+    end
+    
+    h = _sinc_kernel(frac, N)
+    L = length(h) ÷ 2
+    
+    # Apply sinc interpolation at fractional location using direct sum
+    result = zero(T)
+    n = -(N÷2)
+    for weight in h
+        idx = iloc + n
+        if 1 <= idx <= length(x)
+            result += x[idx] * weight
+        end
+        n += 1
+    end
+    result
+end
+
+function _interpolate_adjoint!(x::AbstractArray{T,1}, val::T, loc::Real, N::Int = 7) where {T}
+    iloc = round(Int, loc)
+    frac = loc - iloc
+    
+    if frac == 0.0 && 1 <= iloc <= length(x)
+        x[iloc] += val
+        return nothing
+    end
+    
+    h = _sinc_kernel(frac, N)
+    n = -(N÷2)
+    for weight in h
+        idx = iloc + n
+        if 1 <= idx <= length(x)
+            x[idx] += val * weight
+        end
+        n += 1
+    end
 end
