@@ -44,3 +44,14 @@ Thus, the mapping between ``k_h`` and ``\theta`` is given by
 ```math
 d(k_z,\theta) = \delta(k_h + k_z \tan(\theta))d(k_z,k_h).
 ```
+
+In 3D, the mapping from ``k_{hx},k_{hy}`` to reflection angle ``\theta`` at a given azimuth ``\phi`` depends on the geologic dip defined by the dip ``\alpha`` and azimuth ``\beta``. Without further derivations, it can be shown that this mapping is given by
+
+```math
+d(k_z,\theta,\phi) = \delta(k_{hx} + \xi\, k_z \tan(\theta)\cos(\phi))\delta(k_{hy} + \xi\,k_z \tan(\theta)\sin(\phi))d(k_z,k_{hx},k_{hy}),
+```
+where ``\xi`` is a correction factor given by
+
+```math
+\xi = \sqrt(\frac{1 + \tan^2(\alpha)}{1 + \tan^2(\alpha)\cos^2(\beta - \phi)}).
+```
