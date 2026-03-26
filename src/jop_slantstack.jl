@@ -1046,7 +1046,7 @@ end
 function _sinc_kernel(δ::Real, N::Int)
     n = -(N÷2):(N÷2)
     h = sinc.(n .- δ)
-    h .* hann(length(h))
+    h .* DSP.Windows.hanning(length(h))
 end
 
 function _shift_forward!(y::AbstractArray{T,1}, x::AbstractArray{T,1}, shift::Real, N::Int = 7) where {T}
