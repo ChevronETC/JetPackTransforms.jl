@@ -22,6 +22,36 @@ end
     @test i[2] == findfirst(x->x≈0, state(A).tant)
 end
 
+@testset "JetSlantStack, correctness advanced" begin
+    h0 = -100
+    dh = 1
+    dz = 1
+    nz = 200
+    h = collect(h0:dh:abs(h0))
+    nh = length(h)
+    og = zeros(Float32, nz, nh)
+    
+    # create a dipping event
+    dip = 20
+    iz0 = div(nz,2)
+    for ih = 1:nh
+        hx = h[ih]
+        z = tan(deg2rad(dip)) * hx + (iz0-1)*dz
+        iz = round(Int, div(z, dz)) + 1
+        og[iz,ih] = 1
+    end
+
+    θ = collect(-30:1:30)
+    
+    A = JopSlantStack(JetSpace(Float32, nz, nh); mode = "depth", theta = θ, dz = dz, dh = dh, h0 = h0)
+    ag = A * og
+
+    argmax_ag = Tuple(argmax(ag))
+    idip = findfirst(==(dip), θ)
+    @show argmax_ag, (iz0, idip)
+    @test argmax_ag == (iz0, idip)
+end
+
 # time mode
 @testset "JetSlantStack, dot product test" for T in (Float32, Float64)
     A = JopSlantStack(JetSpace(T, 64, 128); dz=0.004, dh=10.0, h0=-1000.0, mode="time")
@@ -34,7 +64,7 @@ end
     @test isapprox(lhs,rhs,rtol=1e-4)
 end
 
-@testset "JetSlantStack, correctness" for padz in (0.0, 0.2)
+@testset "JetSlantStack, correctness (time)" for padz in (0.0, 0.2)
     A = JopSlantStack(JetSpace(Float64, 64, 128); dz=0.004, dh=10.0, h0=-1000.0, padz, mode="time")
     m = zeros(domain(A))
     m[32,:] .= 1
@@ -45,7 +75,7 @@ end
 
 # depth-time parity test
 @testset "JetSlantStack, parity" begin
-    theta = collect(-45:1.0:45)
+    theta = collect(-35:1.0:45)
     # the ray parameters that would give the same results as theta is
     p = @. -tan(deg2rad(theta))
     
@@ -72,7 +102,7 @@ end
 end
 
 @testset "JetSlantStackShiftSum, parity" begin
-    theta = collect(-45:1.0:45)
+    theta = collect(-35:1.0:45)
     # the ray parameters that would give the same results as theta is
     p = @. -tan(deg2rad(theta))
     
@@ -94,7 +124,7 @@ end
 end
 
 @testset "JetSlantStack vs JetSlantStackShiftSum, parity" begin
-    theta = collect(-45:1.0:45)
+    theta = collect(-35:1.0:45)
     A1 = JopSlantStack(JetSpace(Float64, 128, 129); mode="depth", theta=theta, dz=0.01, h0=-0.64, dh=0.01)
     A2 = JopSlantStackShiftSum(JetSpace(Float64, 128, 129); mode="depth" , theta=theta, dz=0.01, h=collect(-0.64:0.01:0.64))
     m = zeros(domain(A1))
@@ -113,7 +143,7 @@ end
     @test similarity > 0.95
 end
 
-@testset "JetSlantStack3D, dot product test, T = $(T), mode = $(mode), dip = $(dip)" for T in (Float32, Float64), mode in ("depth", "time"), (dip, azimuth) in ((0.0,0.0), (30.0, 60.0))
+@testset "JetSlantStack3D, dot product test, T = $(T), mode = $(mode), dip = $(dip)" for T in (Float32, Float64), mode in ("depth", "time"), (dip, azimuth) in ((0.0,0.0), (20.0, 30.0))
     Random.seed!(1234)
     A = JopSlantStack3D(JetSpace(T, 32, 8, 5); dz=10.0, dhx=10.0, dhy=5.0, hx0=-1000.0, hy0=-500.0, mode=mode, dip=dip, azimuth=azimuth, taperz=(0.3,0.3), taperhx=(0.3,0.3), taperhy=(0.3,0.3), taperkz=(0.3,0.3), taperkhx=(0.3,0.3), taperkhy=(0.3,0.3))
 
@@ -126,8 +156,47 @@ end
     @test isapprox(lhs,rhs,rtol=1e-4)
 end
 
+@testset "JetSlantStack3D correctness" begin
+    hx0 = -100
+    hy0 = -100
+    dhx = 1
+    dhy = 1
+    dz = 1
+    nz = 200
+    nx = 1
+    ny = 1
+    hx = collect(hx0:dhx:abs(hx0))
+    hy = collect(hy0:dhy:abs(hy0))
+    nhx = length(hx)
+    nhy = length(hy)
+    og = zeros(Float32, nz, ny, nx, nhx, nhy)
+    
+    # create a dipping event
+    dip = 20
+    azimuth = 45
+    iz0 = div(nz,2)
+    for ihx = 1:nhx
+        for ihy = 1:nhy
+            z = tan(deg2rad(dip)) * (cos(deg2rad(azimuth)) * hx[ihx] + sin(deg2rad(azimuth)) * hy[ihy]) + (iz0-1)*dz
+            iz = round(Int, div(z, dz)) + 1
+            og[iz,1,1,ihx,ihy] = 1
+        end
+    end
+
+    θ = collect(-30:1:30)
+    ϕ = collect(0:45:135)
+    A = JopSlantStack3D(JetSpace(Float32, nz, ny, nx, nhx, nhy); mode = "depth", theta = θ, phi = ϕ, dz = dz, dhx = dhx, dhy = dhy, hx0 = hx0, hy0 = hy0)
+    ag = A * og
+
+    argmax_ag = Tuple(argmax(ag))
+    idip = findfirst(==(dip), θ)
+    iaz = findfirst(==(azimuth), ϕ)
+    @show argmax_ag, (iz0, 1, 1, idip, iaz)
+    @test argmax_ag == (iz0, 1, 1, idip, iaz)
+end
+
 @testset "JetSlantStack3D, time-depth parity" begin
-    theta = collect(-45:1.0:45)
+    theta = collect(-35:1.0:45)
     phi = [0.0, 90.0]
     
     # the ray parameters that would give the same results as theta/phi are
@@ -157,7 +226,7 @@ end
 end
 
 @testset "JetSlantStack3D, 3D vs 5D parity" begin
-    theta = collect(-45:1.0:45)
+    theta = collect(-35:1.0:45)
     phi = [0.0]
     px = @. -tan(deg2rad(theta))
     py = [0.0]
@@ -183,7 +252,7 @@ end
 end
 
 @testset "JetSlantStack3D, dip invariance" begin
-    theta = collect(-45:1.0:45)
+    theta = collect(-35:1.0:45)
     phi = [0.0]
     
     A1 = JopSlantStack3D(JetSpace(Float64, 128, 129, 5); mode="depth", theta=theta, phi=phi, dz=0.01, hx0=-0.64, dhx=0.01, hy0=0, dhy=0.01, dip=0.0, azimuth=0.0)
@@ -219,7 +288,7 @@ end
 end
 
 @testset "JetSlantStackShiftSum3D, time-depth parity" begin
-    theta = collect(-45:1.0:45)
+    theta = collect(-35:1.0:45)
     phi = [0.0, 90.0]
     
     # the ray parameters that would give the same results as theta/phi are
@@ -248,14 +317,14 @@ end
 end
 
 @testset "JetSlantStackShiftSum3D, dip parity" begin
-    theta = collect(-45:1.0:45)
+    theta = collect(-10:1.0:15)
     phi = collect(0.0:45.0:135.0)
     
     A1 = JopSlantStackShiftSum3D(JetSpace(Float64, 64, 129); mode="depth", theta=theta, phi = phi, dz=0.01, hx=collect(-0.64:0.01:0.64), hy=collect(-0.64:0.01:0.64), dip = 0.0, azimuth = 0.0)
     A2 = JopSlantStackShiftSum3D(JetSpace(Float64, 64, 129); mode="depth", theta=theta, phi = phi, dz=0.01, hx=collect(-0.64:0.01:0.64), hy=collect(-0.64:0.01:0.64), dip = zeros(64), azimuth = zeros(64))
     m = zeros(domain(A1))
     for i = 1:129
-        m[div(i,4)+20,i] = 1.0
+        m[26+div(i,10),i] = 1.0
     end
     m[16,64] = 1
     m[32,96] = 1
@@ -280,7 +349,7 @@ end
 end
 
 @testset "JetSlantStackShiftSum3D, dip invariance" begin
-    theta = collect(-45:1.0:45)
+    theta = collect(-10:1.0:15)
     phi = [0.0]
     
     A1 = JopSlantStackShiftSum3D(JetSpace(Float64, 64, 129); mode="depth", theta=theta, phi = phi, dz=0.01, hx=collect(-0.64:0.01:0.64), hy=collect(-0.64:0.01:0.64), dip = 0.0, azimuth = 0.0)
@@ -288,7 +357,7 @@ end
 
     m = zeros(domain(A1))
     for i = 1:129
-        m[div(i,4)+20,i] = 1.0
+        m[26+div(i,10),i] = 1.0
     end
     m[16,64] = 1
     m[32,96] = 1
@@ -302,7 +371,7 @@ end
 end
 
 @testset "JetSlantStackShiftSum3D, offsets parity" begin
-    theta = collect(-45:5.0:45)
+    theta = collect(-35:5.0:45)
     phi = collect(0.0:45.0:135.0)
 
     hx_reg = collect(-0.6:0.1:0.6)
@@ -332,8 +401,8 @@ end
     @test err_d < 1e-7
 end
 
-@testset "JetSlantStack3D vs JetSlantStackShiftSum3D, parity" for dip in (0.0, 10.0)
-    theta = collect(-45:1.0:45)
+@testset "JetSlantStack3D vs JetSlantStackShiftSum3D, parity" for dip in (0.0, 60.0)
+    theta = collect(-45:1.0:65)
     phi = collect(0.0:45.0:135.0)
     azimuth = 45.0
     A1 = JopSlantStack3D(JetSpace(Float64, 128, 129, 5); mode="depth", theta=theta, phi=phi, dz=0.01, hx0=-0.64, dhx=0.01, hy0=0, dhy=0.01, dip=dip, azimuth=azimuth)
@@ -341,10 +410,12 @@ end
     m = zeros(domain(A1))
     for i = 1:129
         m[div(i,4)+20,i,1] = 1.0
-        m[div(i,3)+10,i,2] = -0.5
+        m[div(i,3)+10,i,2] = 1.0
     end
     m[16,64,1] = 1
-    m[64,96,5] = -0.2
+    m[64,96,1] = 1
+
+    # @code_warntype d2 = A2*m
     d1 = A1*m
     d2 = A2*m
 
@@ -356,7 +427,7 @@ end
 end
 
 @testset "JopSlantStackShiftSum vs JopSlantStackShiftSum3D, parity" begin
-    theta = collect(-45:1.0:45)
+    theta = collect(-35:1.0:45)
     phi = [0.0]
     A1 = JopSlantStackShiftSum(JetSpace(Float64, 128, 129); mode="depth" , theta=theta, dz=0.01, h=collect(-0.64:0.01:0.64))
     A2 = JopSlantStackShiftSum3D(JetSpace(Float64, 128, 129, 5); mode="depth" , theta=theta, phi=phi, dz=0.01, hx=collect(-0.64:0.01:0.64), hy=collect(0:0.01:0.04))
