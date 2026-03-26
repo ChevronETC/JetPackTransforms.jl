@@ -1,4 +1,3 @@
-using InteractiveUtils
 using JetPackTransforms, Jets, Test, LinearAlgebra, Random
 
 # depth mode
