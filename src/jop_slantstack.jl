@@ -1043,10 +1043,18 @@ function _shift_zeropad(x::AbstractVector{T}, s::Int) where {T}
     return y
 end
 
+
+@inline function _hann_local(L::Int, T::Type=Float32)
+    L <= 1 && return ones(T, L)
+    n = collect(0:(L-1))
+    return T(0.5) .- T(0.5) .* cos.(T(2π) .* (n ./ (L-1)))
+end
+
 function _sinc_kernel(δ::Real, N::Int)
     n = -(N÷2):(N÷2)
     h = sinc.(n .- δ)
-    h .* DSP.Windows.hanning(length(h))
+    w = _hann_local(length(h), eltype(h))
+    h .* w
 end
 
 function _shift_forward!(y::AbstractArray{T,1}, x::AbstractArray{T,1}, shift::Real, N::Int = 7) where {T}
